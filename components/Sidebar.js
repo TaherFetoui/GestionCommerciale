@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 import { themes, translations } from '../constants/AppConfig';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useResponsive } from '../hooks/useResponsive';
@@ -18,15 +19,37 @@ const navItems = [
 ];
 
 export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
-    const { theme, language, signOut } = useAuth();
+    const { user, theme, language, signOut } = useAuth();
     const { isMobile } = useResponsive();
     const tTheme = themes[theme];
     const t = translations[language];
+    const [profileName, setProfileName] = useState('');
+
+    useEffect(() => {
+        const fetchProfile = async () => {
+            if (user) {
+                const { data } = await supabase
+                    .from('profiles')
+                    .select('full_name')
+                    .eq('id', user.id)
+                    .single();
+                
+                const capitalizeFirstLetter = (str) => str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
+                
+                if (data && data.full_name) {
+                    setProfileName(capitalizeFirstLetter(data.full_name));
+                } else if (user.email) {
+                    setProfileName(capitalizeFirstLetter(user.email.split('@')[0]));
+                }
+            }
+        };
+        fetchProfile();
+    }, [user]);
 
     const handleNavigate = (screen) => {
         setActiveScreen(screen);
         if (isMobile) {
-            onClose(); // Close the sidebar after navigating on mobile
+            onClose();
         }
     };
 
@@ -34,7 +57,9 @@ export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
         <View style={[styles.container, { backgroundColor: tTheme.sidebarBackground }]}>
             <View style={styles.header}>
                 <Image source={require('../assets/images/logo.png')} style={styles.logo} />
-                <Text style={styles.title}>Général Informatique</Text>
+                <Text style={[styles.title, { textTransform: 'capitalize' }]} numberOfLines={1}>
+                    {profileName || '...'}
+                </Text>
             </View>
 
             <View style={styles.navContainer}>
@@ -65,7 +90,7 @@ export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
 
 const styles = StyleSheet.create({
     container: {
-        width: 260,
+        width: 220, // --- WIDTH REDUCED HERE ---
         height: '100%',
         paddingTop: 40,
         paddingHorizontal: 16,
@@ -74,7 +99,7 @@ const styles = StyleSheet.create({
     },
     header: { flexDirection: 'row', alignItems: 'center', marginBottom: 32, },
     logo: { width: 40, height: 40, borderRadius: 8, },
-    title: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold', marginLeft: 12, },
+    title: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold', marginLeft: 12, flexShrink: 1 },
     navContainer: { flex: 1, },
     navItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 8, marginBottom: 8, },
     navText: { fontSize: 15, marginLeft: 16, fontWeight: '500', },

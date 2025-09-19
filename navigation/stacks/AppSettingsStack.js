@@ -4,18 +4,20 @@ import { useAuth } from '../../context/AuthContext';
 import { getStackScreenOptions } from '../navigationConfig';
 import { translations } from '../../constants/AppConfig';
 
-import PurchaseOrdersListScreen from '../../screens/Purchases/PurchaseOrdersListScreen';
-import CreatePurchaseOrderScreen from '../../screens/Purchases/CreatePurchaseOrderScreen';
+import AppSettingsScreen from '../../screens/AppSettingsScreen';
 
 const Stack = createNativeStackNavigator();
 
-export default function PurchasesStack() {
+export default function AppSettingsStack() {
     const { language } = useAuth();
     const t = translations[language];
     return (
         <Stack.Navigator screenOptions={getStackScreenOptions}>
-            <Stack.Screen name="PurchaseOrdersList" component={PurchaseOrdersListScreen} options={{title: t.purchaseOrders}} />
-            <Stack.Screen name="CreatePurchaseOrder" component={CreatePurchaseOrderScreen} options={{title: "Nouvelle Commande"}} />
+            <Stack.Screen 
+                name="AppSettings" 
+                component={AppSettingsScreen} 
+                options={{ title: t.appSettings }} 
+            />
         </Stack.Navigator>
     );
 }

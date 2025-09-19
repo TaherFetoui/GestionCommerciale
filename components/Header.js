@@ -5,19 +5,26 @@ import { themes } from '../constants/AppConfig';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useResponsive } from '../hooks/useResponsive';
 
-export default function Header({ title, onToggleSidebar }) {
+export default function Header({ title, navigation, onToggleSidebar }) {
     const { theme, user } = useAuth();
     const { isMobile } = useResponsive();
     const tTheme = themes[theme];
     const username = user?.email ? user.email.split('@')[0] : 'Guest';
+    const canGoBack = navigation?.canGoBack();
 
     return (
         <View style={[styles.container, { backgroundColor: tTheme.card, borderBottomColor: tTheme.border }]}>
             <View style={styles.leftContainer}>
-                {/* Show menu button only on mobile */}
-                {isMobile && (
+                {/* Show menu button on mobile IF it's the first screen */}
+                {isMobile && !canGoBack && (
                     <TouchableOpacity onPress={onToggleSidebar} style={{ marginRight: 16 }}>
                         <Ionicons name="menu-outline" size={28} color={tTheme.text} />
+                    </TouchableOpacity>
+                )}
+                {/* Show back button if we can go back */}
+                {canGoBack && (
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 16 }}>
+                        <Ionicons name="arrow-back-outline" size={24} color={tTheme.primary} />
                     </TouchableOpacity>
                 )}
                 <Text style={[styles.title, { color: tTheme.text }]}>{title}</Text>

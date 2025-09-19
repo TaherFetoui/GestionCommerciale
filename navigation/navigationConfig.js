@@ -1,25 +1,16 @@
 import React from 'react';
-import { TouchableOpacity } from 'react-native';
-import { themes } from '../constants/AppConfig';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import Header from '../components/Header';
+import { useAuth } from '../context/AuthContext';
 
-export const getStackScreenOptions = (theme, navigation) => {
-    const tTheme = themes[theme];
-    return {
-        headerStyle: {
-            backgroundColor: tTheme.card,
-        },
-        headerTintColor: tTheme.text,
-        headerTitleStyle: {
-            fontWeight: 'bold',
-        },
-        headerShadowVisible: false,
-        headerLeft: () => (
-            navigation.canGoBack() ? (
-                <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 20 }}>
-                    <Ionicons name="arrow-back-outline" size={24} color={tTheme.primary} />
-                </TouchableOpacity>
-            ) : null
-        ),
-    };
+export const getStackScreenOptions = ({ route, navigation }) => {
+  // This is the header component for each screen in a stack.
+  // The 'header' option allows us to render a completely custom component.
+  return {
+    header: (props) => {
+      // We get the title from the screen's options, which we define in each Stack.Screen
+      const title = props.options.title || props.route.name;
+      // We pass the title and navigation props down to our custom Header component.
+      return <Header title={title} navigation={props.navigation} />;
+    },
+  };
 };
