@@ -61,6 +61,22 @@ export const translations = {
     raisonSociale: 'Company Name',
     matriculeFiscale: 'Tax ID',
     address: 'Address',
+    
+    // Invoice specific
+    invoiceNumber: 'Invoice Number',
+    paymentMethod: 'Payment Method',
+    issueDate: 'Issue Date',
+    dueDate: 'Due Date',
+    client: 'Client',
+    lineItems: 'Line Items',
+    article: 'Item',
+    description: 'Description',
+    enterDescription: 'Enter item description',
+    quantity: 'Quantity',
+    unitPrice: 'Unit Price',
+    addItem: 'Add Item',
+    summary: 'Summary',
+    saveInvoice: 'Save Invoice',
   },
   fr: {
     // General
@@ -123,6 +139,22 @@ export const translations = {
     raisonSociale: 'Raison Sociale',
     matriculeFiscale: 'Matricule Fiscale',
     address: 'Adresse',
+    
+    // Invoice specific
+    invoiceNumber: 'Numéro de Facture',
+    paymentMethod: 'Mode de Paiement',
+    issueDate: 'Date d\'Émission',
+    dueDate: 'Date d\'Échéance',
+    client: 'Client',
+    lineItems: 'Lignes de Facturation',
+    article: 'Article',
+    description: 'Description',
+    enterDescription: 'Saisir la description de l\'article',
+    quantity: 'Quantité',
+    unitPrice: 'Prix Unitaire',
+    addItem: 'Ajouter un Article',
+    summary: 'Résumé',
+    saveInvoice: 'Enregistrer la Facture',
   },
   ar: {
     // General
@@ -185,6 +217,22 @@ export const translations = {
     raisonSociale: 'اسم الشركة',
     matriculeFiscale: 'المعرف الضريبي',
     address: 'العنوان',
+    
+    // Invoice specific
+    invoiceNumber: 'رقم الفاتورة',
+    paymentMethod: 'طريقة الدفع',
+    issueDate: 'تاريخ الإصدار',
+    dueDate: 'تاريخ الاستحقاق',
+    client: 'العميل',
+    lineItems: 'بنود الفاتورة',
+    article: 'صنف',
+    description: 'الوصف',
+    enterDescription: 'أدخل وصف الصنف',
+    quantity: 'الكمية',
+    unitPrice: 'السعر للوحدة',
+    addItem: 'إضافة صنف',
+    summary: 'الملخص',
+    saveInvoice: 'حفظ الفاتورة',
   },
 };
 
