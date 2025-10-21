@@ -1,8 +1,7 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { useAuth } from '../context/AuthContext';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ModernInfoCard } from '../components/ModernUIComponents';
 import { themes, translations } from '../constants/AppConfig';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { useAuth } from '../context/AuthContext';
 import { getGlobalStyles } from '../styles/GlobalStyles';
 
 export default function AppSettingsScreen() {
@@ -18,48 +17,75 @@ export default function AppSettingsScreen() {
     };
 
     return (
-        <View style={styles.container}>
-            {/* Theme Setting Card */}
-            <View style={styles.card}>
-                <View style={styles.listItem}>
-                    <View>
-                        <Text style={styles.listItemTitle}>{t.switchTheme}</Text>
-                        <Text style={styles.listItemSubtitle}>
-                            {theme === 'light' ? 'Clair' : 'Sombre'}
+        <View style={[styles.container, { backgroundColor: tTheme.background }]}>
+            <ScrollView contentContainerStyle={localStyles.scrollContent}>
+                {/* Theme Setting Card */}
+                <ModernInfoCard
+                    title={t.switchTheme}
+                    value={theme === 'light' ? 'Clair' : 'Sombre'}
+                    icon={theme === 'light' ? 'moon-outline' : 'sunny-outline'}
+                    theme={theme}
+                    onPress={toggleTheme}
+                />
+
+                {/* Language Setting Card */}
+                <ModernInfoCard
+                    title={t.switchLanguage}
+                    value={currentLanguageName[language]}
+                    icon="language-outline"
+                    theme={theme}
+                    onPress={toggleLanguage}
+                />
+
+                {/* App Information */}
+                <View style={[styles.card, localStyles.infoSection]}>
+                    <Text style={[localStyles.infoTitle, { color: tTheme.text }]}>
+                        À propos de l'application
+                    </Text>
+                    <View style={localStyles.infoRow}>
+                        <Text style={[localStyles.infoLabel, { color: tTheme.textSecondary }]}>
+                            Version
+                        </Text>
+                        <Text style={[localStyles.infoValue, { color: tTheme.text }]}>
+                            1.0.0
                         </Text>
                     </View>
-                    <TouchableOpacity onPress={toggleTheme} style={localStyles.iconButton}>
-                        <Ionicons 
-                            name={theme === 'light' ? 'moon-outline' : 'sunny-outline'} 
-                            size={28} 
-                            color={tTheme.primary} 
-                        />
-                    </TouchableOpacity>
-                </View>
-            </View>
-
-            {/* Language Setting Card */}
-            <View style={styles.card}>
-                <View style={styles.listItem}>
-                    <View>
-                        <Text style={styles.listItemTitle}>{t.switchLanguage}</Text>
-                        <Text style={styles.listItemSubtitle}>{currentLanguageName[language]}</Text>
+                    <View style={localStyles.infoRow}>
+                        <Text style={[localStyles.infoLabel, { color: tTheme.textSecondary }]}>
+                            Développeur
+                        </Text>
+                        <Text style={[localStyles.infoValue, { color: tTheme.text }]}>
+                            Taher Fetoui
+                        </Text>
                     </View>
-                    <TouchableOpacity onPress={toggleLanguage} style={localStyles.iconButton}>
-                        <Ionicons 
-                            name="language-outline" 
-                            size={28} 
-                            color={tTheme.primary} 
-                        />
-                    </TouchableOpacity>
                 </View>
-            </View>
+            </ScrollView>
         </View>
     );
 }
 
 const localStyles = StyleSheet.create({
-    iconButton: {
-        padding: 8,
-    }
+    scrollContent: {
+        padding: 20,
+    },
+    infoSection: {
+        marginTop: 20,
+    },
+    infoTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 16,
+    },
+    infoRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingVertical: 12,
+    },
+    infoLabel: {
+        fontSize: 15,
+    },
+    infoValue: {
+        fontSize: 15,
+        fontWeight: '600',
+    },
 });

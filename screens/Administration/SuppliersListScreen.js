@@ -1,18 +1,27 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../context/AuthContext';
-import { themes, translations } from '../../constants/AppConfig';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import React, { useCallback, useLayoutEffect, useState } from 'react';
+import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+    ModernSearchBar,
+    ModernTable,
+} from '../../components/ModernUIComponents';
+import { themes, translations } from '../../constants/AppConfig';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
+import { getGlobalStyles } from '../../styles/GlobalStyles';
 
 export default function SuppliersListScreen() {
     const navigation = useNavigation();
     const [suppliers, setSuppliers] = useState([]);
+    const [filteredSuppliers, setFilteredSuppliers] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
     const { theme, language } = useAuth();
     const tTheme = themes[theme];
     const t = translations[language];
+    const styles = getGlobalStyles(theme);
 
     const fetchSuppliers = useCallback(async () => {
         setLoading(true);
@@ -20,44 +29,155 @@ export default function SuppliersListScreen() {
         if (error) {
             Alert.alert(t.error, error.message);
         } else {
-            setSuppliers(data);
+            setSuppliers(data || []);
+            setFilteredSuppliers(data || []);
         }
         setLoading(false);
     }, [t.error]);
 
-    useFocusEffect(fetchSuppliers);
+    useFocusEffect(
+        useCallback(() => {
+            fetchSuppliers();
+        }, [fetchSuppliers])
+    );
 
-    if (loading) {
-        return <View style={[styles.centered, { backgroundColor: tTheme.background }]}><ActivityIndicator size="large" color={tTheme.accent} /></View>;
-    }
+    useLayoutEffect(() => {
+        navigation.setOptions({
+            headerRight: () => (
+                <TouchableOpacity
+                    style={[localStyles.headerButton, { backgroundColor: tTheme.primarySoft }]}
+                    onPress={() => navigation.navigate('CreateSupplier')}
+                >
+                    <Ionicons name="add" size={20} color={tTheme.primary} />
+                    <Text style={[localStyles.headerButtonText, { color: tTheme.primary }]}>Nouveau</Text>
+                </TouchableOpacity>
+            ),
+        });
+    }, [navigation, theme]);
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await fetchSuppliers();
+        setRefreshing(false);
+    }, [fetchSuppliers]);
+
+    // Filter suppliers based on search
+    React.useEffect(() => {
+        if (searchQuery) {
+            setFilteredSuppliers(
+                suppliers.filter(
+                    (supplier) =>
+                        supplier.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        supplier.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        supplier.phone?.includes(searchQuery)
+                )
+            );
+        } else {
+            setFilteredSuppliers(suppliers);
+        }
+    }, [searchQuery, suppliers]);
+
+    const tableColumns = [
+        {
+            key: 'name',
+            label: 'Nom',
+            flex: 1.5,
+            render: (row) => (
+                <View>
+                    <Text style={[localStyles.supplierName, { color: tTheme.text }]} numberOfLines={1}>
+                        {row.name}
+                    </Text>
+                    {row.email && (
+                        <Text style={[localStyles.supplierEmail, { color: tTheme.textSecondary }]} numberOfLines={1}>
+                            {row.email}
+                        </Text>
+                    )}
+                </View>
+            ),
+        },
+        {
+            key: 'phone',
+            label: 'Téléphone',
+            flex: 1,
+            render: (row) => (
+                <Text style={{ color: tTheme.text }} numberOfLines={1}>
+                    {row.phone || 'N/A'}
+                </Text>
+            ),
+        },
+        {
+            key: 'address',
+            label: 'Adresse',
+            flex: 1.5,
+            render: (row) => (
+                <Text style={{ color: tTheme.textSecondary }} numberOfLines={2}>
+                    {row.address || 'Aucune adresse'}
+                </Text>
+            ),
+        },
+    ];
 
     return (
         <View style={[styles.container, { backgroundColor: tTheme.background }]}>
-            <FlatList
-                data={suppliers}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                    <TouchableOpacity style={[styles.item, { backgroundColor: tTheme.card }]}>
-                        <View>
-                            <Text style={[styles.title, { color: tTheme.text }]}>{item.name}</Text>
-                            <Text style={{ color: tTheme.text }}>{item.email || 'Pas d\'email'}</Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={24} color={tTheme.text} />
-                    </TouchableOpacity>
-                )}
-                ListEmptyComponent={<Text style={{ color: tTheme.text, textAlign: 'center', marginTop: 20 }}>Aucun fournisseur trouvé.</Text>}
-            />
-            <TouchableOpacity style={[styles.fab, { backgroundColor: tTheme.accent }]} onPress={() => navigation.navigate('CreateSupplier')}>
-                <Ionicons name="add" size={30} color="#fff" />
-            </TouchableOpacity>
+            <ScrollView
+                contentContainerStyle={localStyles.scrollContent}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[tTheme.primary]} />
+                }
+            >
+                <View style={localStyles.searchContainer}>
+                    <ModernSearchBar
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        placeholder="Rechercher un fournisseur (nom, email, téléphone)..."
+                        theme={theme}
+                    />
+                </View>
+
+                <View style={localStyles.tableWrapper}>
+                    <ModernTable
+                        data={filteredSuppliers}
+                        columns={tableColumns}
+                        theme={theme}
+                        loading={loading}
+                        emptyMessage="Aucun fournisseur trouvé. Créez votre premier fournisseur."
+                    />
+                </View>
+            </ScrollView>
         </View>
     );
 }
 
-const styles = StyleSheet.create({
-    centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    container: { flex: 1 },
-    item: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 15, marginVertical: 8, marginHorizontal: 16, borderRadius: 10, elevation: 2 },
-    title: { fontSize: 18, fontWeight: 'bold' },
-    fab: { position: 'absolute', width: 56, height: 56, alignItems: 'center', justifyContent: 'center', right: 20, bottom: 20, borderRadius: 28, elevation: 8 },
+const localStyles = StyleSheet.create({
+    headerButton: {
+        marginRight: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 20,
+    },
+    headerButtonText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        marginLeft: 6,
+    },
+    scrollContent: {
+        padding: 20,
+    },
+    searchContainer: {
+        marginBottom: 20,
+    },
+    tableWrapper: {
+        marginBottom: 20,
+    },
+    supplierName: {
+        fontSize: 15,
+        fontWeight: '600',
+        marginBottom: 2,
+    },
+    supplierEmail: {
+        fontSize: 12,
+        marginTop: 2,
+    },
 });

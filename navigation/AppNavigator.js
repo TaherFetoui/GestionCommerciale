@@ -17,6 +17,7 @@ import CompanySettingsStack from './stacks/CompanySettingsStack';
 import DashboardStack from './stacks/DashboardStack';
 import PurchasesStack from './stacks/PurchasesStack';
 import SalesStack from './stacks/SalesStack';
+import StockStack from './stacks/StockStack';
 
 /**
  * This component acts as a router, selecting which module's navigation stack
@@ -37,9 +38,9 @@ const MainContent = React.memo(({ screen }) => {
                 return SalesStack;
             case 'Réglages':
                 return AppSettingsStack;
-            // Add cases for Stock, Finance, etc. as you build their stacks
-            // case 'Stock':
-            //     return StockStack;
+            case 'Stock':
+                return StockStack;
+            // Add cases for Finance, etc. as you build their stacks
             default:
                 return () => <PlaceholderScreen title={screen} />;
         }
@@ -140,21 +141,37 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         flexDirection: 'row',
+        overflow: 'hidden',
         ...PlatformUtils.getStyles(
             { 
                 minHeight: '100vh',
-                overflow: 'hidden'
+                width: '100vw',
+                maxWidth: '100vw',
             },
-            { flex: 1 },
-            { flex: 1 }
+            { 
+                flex: 1,
+                width: '100%',
+            },
+            { 
+                flex: 1,
+                width: '100%',
+            }
         ),
     },
     sidebarDesktop: {
-        // Width is controlled by the Sidebar component itself
+        flexShrink: 0,
+        overflow: 'hidden',
         ...PlatformUtils.getStyles(
-            { height: '100vh' },
-            {},
-            {}
+            { 
+                height: '100vh',
+                maxHeight: '100vh',
+            },
+            { 
+                height: '100%',
+            },
+            { 
+                height: '100%',
+            }
         ),
     },
     sidebarMobile: {
@@ -162,34 +179,42 @@ const styles = StyleSheet.create({
         top: 0,
         bottom: 0,
         left: 0,
-        zIndex: 10,
-        elevation: 10,
+        zIndex: 1000,
         ...PlatformUtils.getStyles(
             { 
                 position: 'fixed',
                 height: '100vh',
-                zIndex: 1000
-            },
-            {
-                position: 'absolute',
-                height: '100%'
+                maxHeight: '100vh',
+                zIndex: 1000,
             },
             {
                 position: 'absolute',
                 height: '100%',
-                elevation: 15
+                elevation: 15,
+            },
+            {
+                position: 'absolute',
+                height: '100%',
+                elevation: 15,
             }
         ),
     },
     content: {
         flex: 1,
+        minWidth: 0,
+        overflow: 'hidden',
         ...PlatformUtils.getStyles(
             { 
+                height: '100vh',
+                maxHeight: '100vh',
                 overflow: 'auto',
-                height: '100vh'
             },
-            { flex: 1 },
-            { flex: 1 }
+            { 
+                flex: 1,
+            },
+            { 
+                flex: 1,
+            }
         ),
     },
 });

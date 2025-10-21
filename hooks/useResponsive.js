@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
-import { useWindowDimensions } from 'react-native';
+import { Dimensions, useWindowDimensions } from 'react-native';
 
 const breakpoints = {
   mobile: 768,
   tablet: 1024,
-  desktop: 1440,
+  desktop: 1280,
+  large: 1920,
 };
 
 export function useResponsive() {
-  const { width, height } = useWindowDimensions();
+  const dimensions = useWindowDimensions();
+  const width = dimensions?.width || Dimensions.get('window').width;
+  const height = dimensions?.height || Dimensions.get('window').height;
   const [orientation, setOrientation] = useState('portrait');
 
   useEffect(() => {
@@ -23,33 +26,68 @@ export function useResponsive() {
         ? 'desktop' 
         : 'large';
 
+  const isMobile = deviceType === 'mobile';
+  const isTablet = deviceType === 'tablet';
+  const isDesktop = deviceType === 'desktop' || deviceType === 'large';
+  const isLarge = deviceType === 'large';
+
   return {
     width,
     height,
     orientation,
     deviceType,
-    isMobile: deviceType === 'mobile',
-    isTablet: deviceType === 'tablet',
-    isDesktop: deviceType === 'desktop' || deviceType === 'large',
-    isLarge: deviceType === 'large',
+    isMobile,
+    isTablet,
+    isDesktop,
+    isLarge,
     isLandscape: orientation === 'landscape',
     isPortrait: orientation === 'portrait',
+    
     // Utility functions for responsive design
     getColumns: () => {
-      if (deviceType === 'mobile') return 1;
-      if (deviceType === 'tablet') return 2;
-      if (deviceType === 'desktop') return 3;
-      return 4;
+      if (isMobile) return 1;
+      if (isTablet) return 2;
+      if (width < breakpoints.large) return 3;
+      if (width < 2400) return 4;
+      return 5;
     },
+    
     getSidebarWidth: () => {
-      if (deviceType === 'mobile') return '100%';
-      if (deviceType === 'tablet') return 280;
-      return 320;
+      if (isMobile) return '100%'; // Full width on mobile
+      if (isTablet) return 240;
+      if (width < breakpoints.large) return 260;
+      return 280;
     },
+    
     getContentPadding: () => {
-      if (deviceType === 'mobile') return 16;
-      if (deviceType === 'tablet') return 24;
-      return 32;
+      if (isMobile) return 12;
+      if (isTablet) return 16;
+      if (width < breakpoints.large) return 20;
+      return 24;
+    },
+    
+    getCardMinWidth: () => {
+      if (isMobile) return '100%';
+      if (isTablet) return 200;
+      if (width < breakpoints.large) return 240;
+      return 260;
+    },
+    
+    getSpacing: () => {
+      if (isMobile) return 8;
+      if (isTablet) return 12;
+      if (width < breakpoints.large) return 16;
+      return 20;
+    },
+    
+    getHeaderHeight: () => {
+      return isMobile ? 56 : 64;
+    },
+    
+    getFontSize: (base = 16) => {
+      if (isMobile) return base - 2;
+      if (isTablet) return base;
+      return base + 2;
     },
   };
 }

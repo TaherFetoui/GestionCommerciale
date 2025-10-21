@@ -1,13 +1,19 @@
-import React, { useState, useCallback } from 'react';
-import { 
-    View, Text, TextInput, StyleSheet, ScrollView, 
-    TouchableOpacity, Alert, ActivityIndicator, Modal 
-} from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../context/AuthContext';
-import { themes, translations } from '../../constants/AppConfig';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text, TextInput,
+    TouchableOpacity,
+    View
+} from 'react-native';
+import { themes, translations } from '../../constants/AppConfig';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 import { getGlobalStyles } from '../../styles/GlobalStyles';
 
 // A reusable component for each section of information
@@ -103,7 +109,8 @@ export default function CompanyInfoScreen() {
     }
 
     return (
-        <ScrollView style={styles.container}>
+        <View style={styles.container}>
+            <ScrollView contentContainerStyle={localStyles.scrollContent}>
             <InfoSection
                 title="Informations Générales"
                 theme={theme}
@@ -178,11 +185,15 @@ export default function CompanyInfoScreen() {
                 </View>
             </Modal>
 
-        </ScrollView>
+            </ScrollView>
+        </View>
     );
 }
 
 const localStyles = StyleSheet.create({
+    scrollContent: {
+        padding: 20,
+    },
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, },
     sectionTitle: { fontSize: 18, fontWeight: 'bold', },
     sectionContent: { marginBottom: 16, },

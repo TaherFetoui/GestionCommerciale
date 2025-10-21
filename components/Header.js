@@ -1,19 +1,26 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useAuth } from '../context/AuthContext';
-import { themes } from '../constants/AppConfig';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { themes } from '../constants/AppConfig';
+import { useAuth } from '../context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
 
-export default function Header({ title, navigation, onToggleSidebar }) {
+export default function Header({ title, navigation, onToggleSidebar, rightActions }) {
     const { theme, user } = useAuth();
-    const { isMobile } = useResponsive();
+    const { isMobile, getContentPadding } = useResponsive();
     const tTheme = themes[theme];
     const username = user?.email ? user.email.split('@')[0] : 'Guest';
     const canGoBack = navigation?.canGoBack();
+    const padding = getContentPadding();
 
     return (
-        <View style={[styles.container, { backgroundColor: tTheme.card, borderBottomColor: tTheme.border }]}>
+        <View style={[
+            styles.container, 
+            { 
+                backgroundColor: tTheme.card, 
+                borderBottomColor: tTheme.border,
+                paddingHorizontal: padding
+            }
+        ]}>
             <View style={styles.leftContainer}>
                 {/* Show menu button on mobile IF it's the first screen */}
                 {isMobile && !canGoBack && (
@@ -30,10 +37,16 @@ export default function Header({ title, navigation, onToggleSidebar }) {
                 <Text style={[styles.title, { color: tTheme.text }]}>{title}</Text>
             </View>
             <View style={styles.rightContainer}>
-                <Ionicons name="notifications-outline" size={24} color={tTheme.textSecondary} style={{marginRight: 20}} />
-                <View style={[styles.avatar, {backgroundColor: tTheme.primarySoft}]}>
-                    <Text style={{color: tTheme.primary, fontWeight: 'bold'}}>{username.charAt(0).toUpperCase()}</Text>
-                </View>
+                {/* Custom right actions for specific screens */}
+                {rightActions && rightActions}
+                {!rightActions && (
+                    <>
+                        <Ionicons name="notifications-outline" size={24} color={tTheme.textSecondary} style={{marginRight: 20}} />
+                        <View style={[styles.avatar, {backgroundColor: tTheme.primarySoft}]}>
+                            <Text style={{color: tTheme.primary, fontWeight: 'bold'}}>{username.charAt(0).toUpperCase()}</Text>
+                        </View>
+                    </>
+                )}
             </View>
         </View>
     );
@@ -45,20 +58,27 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 24,
         borderBottomWidth: 1,
+        flexShrink: 0,
+        paddingVertical: 8,
     },
     leftContainer: {
         flexDirection: 'row',
         alignItems: 'center',
+        flex: 1,
+        minWidth: 0,
+        marginRight: 16,
     },
     title: {
-        fontSize: 20,
-        fontWeight: 'bold',
+        fontSize: 18,
+        fontWeight: '700',
+        flex: 1,
+        minWidth: 0,
     },
     rightContainer: {
         flexDirection: 'row',
         alignItems: 'center',
+        flexShrink: 0,
     },
     avatar: {
         width: 36,
@@ -66,5 +86,6 @@ const styles = StyleSheet.create({
         borderRadius: 18,
         alignItems: 'center',
         justifyContent: 'center',
+        flexShrink: 0,
     }
 });

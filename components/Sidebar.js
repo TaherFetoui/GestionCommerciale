@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { useAuth } from '../context/AuthContext';
-import { supabase } from '../lib/supabase';
-import { themes, translations } from '../constants/AppConfig';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useEffect, useState } from 'react';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { themes, translations } from '../constants/AppConfig';
+import { useAuth } from '../context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
+import { supabase } from '../lib/supabase';
 
 const navItems = [
     { name: 'dashboard', icon: 'apps-outline', screen: 'Dashboard' },
@@ -20,7 +20,7 @@ const navItems = [
 
 export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
     const { user, theme, language, signOut } = useAuth();
-    const { isMobile } = useResponsive();
+    const { isMobile, isTablet, getSidebarWidth } = useResponsive();
     const tTheme = themes[theme];
     const t = translations[language];
     const [profileName, setProfileName] = useState('');
@@ -53,8 +53,16 @@ export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
         }
     };
 
+    const sidebarWidth = getSidebarWidth();
+    
     return (
-        <View style={[styles.container, { backgroundColor: tTheme.sidebarBackground }]}>
+        <View style={[
+            styles.container, 
+            { 
+                backgroundColor: tTheme.sidebarBackground,
+                width: sidebarWidth
+            }
+        ]}>
             <View style={styles.header}>
                 <Image source={require('../assets/images/logo.png')} style={styles.logo} />
                 <Text style={[styles.title, { textTransform: 'capitalize' }]} numberOfLines={1}>
@@ -90,18 +98,61 @@ export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
 
 const styles = StyleSheet.create({
     container: {
-        width: 220, // --- WIDTH REDUCED HERE ---
         height: '100%',
-        paddingTop: 40,
-        paddingHorizontal: 16,
+        paddingVertical: 16,
+        paddingHorizontal: 10,
         borderRightWidth: 1,
-        borderRightColor: '#374151',
+        borderRightColor: 'rgba(255, 255, 255, 0.08)',
+        flexShrink: 0,
+        overflow: 'hidden',
     },
-    header: { flexDirection: 'row', alignItems: 'center', marginBottom: 32, },
-    logo: { width: 40, height: 40, borderRadius: 8, },
-    title: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold', marginLeft: 12, flexShrink: 1 },
-    navContainer: { flex: 1, },
-    navItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 8, marginBottom: 8, },
-    navText: { fontSize: 15, marginLeft: 16, fontWeight: '500', },
-    footer: { paddingVertical: 24, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, }
+    header: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        marginBottom: 20,
+        paddingHorizontal: 6,
+    },
+    logo: { 
+        width: 32, 
+        height: 32, 
+        borderRadius: 8,
+        flexShrink: 0,
+    },
+    title: { 
+        color: '#FFFFFF', 
+        fontSize: 14, 
+        fontWeight: '700', 
+        marginLeft: 10, 
+        flex: 1,
+        minWidth: 0,
+    },
+    navContainer: { 
+        flex: 1,
+        overflow: 'auto',
+    },
+    navItem: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        paddingVertical: 10, 
+        paddingHorizontal: 12, 
+        borderRadius: 10, 
+        marginBottom: 3,
+    },
+    navText: { 
+        fontSize: 13, 
+        marginLeft: 12, 
+        fontWeight: '500',
+        flex: 1,
+        minWidth: 0,
+    },
+    footer: { 
+        paddingVertical: 14, 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        paddingHorizontal: 12,
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255, 255, 255, 0.08)',
+        marginTop: 6,
+        flexShrink: 0,
+    }
 });

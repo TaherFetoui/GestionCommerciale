@@ -1,24 +1,35 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, RefreshControl } from 'react-native';
-import { useAuth } from '../context/AuthContext';
-import { themes, translations } from '../constants/AppConfig';
-import { getGlobalStyles } from '../styles/GlobalStyles';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { supabase } from '../lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useState } from 'react';
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { themes, translations } from '../constants/AppConfig';
+import { useAuth } from '../context/AuthContext';
+import { useResponsive } from '../hooks/useResponsive';
+import { supabase } from '../lib/supabase';
+import { getGlobalStyles } from '../styles/GlobalStyles';
 
 // Composant pour les cartes de statistiques
 const StatCard = React.memo(({ title, value, icon, color, currency = '' }) => {
     const { theme } = useAuth();
     const tTheme = themes[theme];
+    const { isMobile } = useResponsive();
+    
     return (
-        <View style={[getGlobalStyles(theme).card, localStyles.statCard]}>
+        <View style={[
+            getGlobalStyles(theme).card, 
+            localStyles.statCard,
+            isMobile && localStyles.statCardMobile
+        ]}>
             <View style={[localStyles.iconContainer, { backgroundColor: color }]}>
                 <Ionicons name={icon} size={24} color="#fff" />
             </View>
-            <View>
-                <Text style={[localStyles.statTitle, { color: tTheme.textSecondary }]}>{title}</Text>
-                <Text style={[localStyles.statValue, { color: tTheme.text }]}>{value} {currency}</Text>
+            <View style={localStyles.statContent}>
+                <Text style={[localStyles.statTitle, { color: tTheme.textSecondary }]} numberOfLines={1}>
+                    {title}
+                </Text>
+                <Text style={[localStyles.statValue, { color: tTheme.text }]} numberOfLines={1}>
+                    {value} {currency}
+                </Text>
             </View>
         </View>
     );
@@ -29,11 +40,13 @@ const PerformanceChart = React.memo(() => {
     const { theme } = useAuth();
     const tTheme = themes[theme];
     return (
-        <View style={[getGlobalStyles(theme).card, { flex: 1, minHeight: 400 }]}>
+        <View style={[getGlobalStyles(theme).card, localStyles.chartContainer]}>
             <Text style={[localStyles.chartTitle, { color: tTheme.text }]}>Rapport des performances</Text>
             <View style={localStyles.chartPlaceholder}>
                 <Ionicons name="analytics-outline" size={80} color={tTheme.border} />
-                <Text style={{color: tTheme.textSecondary, marginTop: 16}}>Les graphiques de performance seront affichés ici</Text>
+                <Text style={{color: tTheme.textSecondary, marginTop: 16, textAlign: 'center', paddingHorizontal: 16}}>
+                    Les graphiques de performance seront affichés ici
+                </Text>
             </View>
         </View>
     );
@@ -41,6 +54,7 @@ const PerformanceChart = React.memo(() => {
 
 export default function DashboardScreen() {
     const { theme, language } = useAuth();
+    const { getContentPadding, getColumns, isMobile } = useResponsive();
     const styles = getGlobalStyles(theme);
     const t = translations[language];
 
@@ -77,9 +91,12 @@ export default function DashboardScreen() {
         return <View style={styles.centered}><ActivityIndicator size="large" color={themes[theme].primary} /></View>;
     }
 
+    const contentPadding = getContentPadding();
+
     return (
         <ScrollView 
             style={styles.container}
+            contentContainerStyle={{ padding: contentPadding }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
             <View style={localStyles.statsGrid}>
@@ -119,13 +136,25 @@ const localStyles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         marginHorizontal: -8,
+        marginBottom: 12,
     },
     statCard: {
         flexDirection: 'row',
         alignItems: 'center',
         margin: 8,
-        flexGrow: 1,
-        minWidth: 250,
+        flex: 1,
+        minWidth: 280,
+        maxWidth: '100%',
+    },
+    statCardMobile: {
+        minWidth: '100%',
+        maxWidth: '100%',
+        flex: 0,
+        flexBasis: 'auto',
+    },
+    statContent: {
+        flex: 1,
+        minWidth: 0,
     },
     iconContainer: {
         width: 48,
@@ -133,14 +162,20 @@ const localStyles = StyleSheet.create({
         borderRadius: 24,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 16,
+        marginRight: 14,
+        flexShrink: 0,
     },
     statTitle: {
-        fontSize: 14,
+        fontSize: 13,
+        marginBottom: 4,
     },
     statValue: {
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: 'bold',
+    },
+    chartContainer: {
+        marginTop: 8,
+        minHeight: 320,
     },
     chartTitle: {
         fontSize: 18,
@@ -148,8 +183,9 @@ const localStyles = StyleSheet.create({
         marginBottom: 16,
     },
     chartPlaceholder: {
-        flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
+        minHeight: 260,
+        paddingVertical: 40,
     },
 });
