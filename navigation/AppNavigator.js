@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { themes } from '../constants/AppConfig';
 import { useAuth } from '../context/AuthContext';
+import { SidebarProvider, useSidebar } from '../context/SidebarContext';
 import { PlatformUtils } from '../hooks/usePlatform';
 import { useResponsive } from '../hooks/useResponsive';
 
@@ -53,10 +54,10 @@ const MainContent = React.memo(({ screen }) => {
  * This is the main navigator for the application after a user has logged in.
  * It orchestrates the entire responsive layout, including the sidebar and main content area.
  */
-export default function AppNavigator() {
+function AppNavigatorContent() {
     const { user, theme } = useAuth();
     const [activeScreen, setActiveScreen] = useState('Dashboard');
-    const [isSidebarVisible, setSidebarVisible] = useState(false);
+    const { isSidebarVisible, toggleSidebar, closeSidebar } = useSidebar();
     const responsive = useResponsive();
     const { isMobile, isTablet, getSidebarWidth } = responsive;
     const tTheme = themes[theme];
@@ -65,17 +66,13 @@ export default function AppNavigator() {
     const handleScreenChange = useCallback((screen) => {
         setActiveScreen(screen);
         if (isMobile) {
-            setSidebarVisible(false);
+            closeSidebar();
         }
-    }, [isMobile]);
-
-    const handleSidebarToggle = useCallback(() => {
-        setSidebarVisible(prev => !prev);
-    }, []);
+    }, [isMobile, closeSidebar]);
 
     const handleSidebarClose = useCallback(() => {
-        setSidebarVisible(false);
-    }, []);
+        closeSidebar();
+    }, [closeSidebar]);
 
     // Memoized styles for better performance
     const containerStyle = useMemo(() => [
@@ -124,7 +121,7 @@ export default function AppNavigator() {
                         activeScreen={activeScreen} 
                         setActiveScreen={handleScreenChange} 
                         onClose={handleSidebarClose}
-                        onToggle={handleSidebarToggle}
+                        onToggle={toggleSidebar}
                         responsive={responsive}
                     />
                 </View>
@@ -134,6 +131,14 @@ export default function AppNavigator() {
                 <MainContent screen={activeScreen} />
             </View>
         </View>
+    );
+}
+
+export default function AppNavigator() {
+    return (
+        <SidebarProvider>
+            <AppNavigatorContent />
+        </SidebarProvider>
     );
 }
 
