@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { themes } from '../constants/AppConfig';
+import { useAuth } from '../context/AuthContext';
 
 // ===== MODERN TABLE COMPONENT =====
-export const ModernTable = ({ data, columns, onRowPress, theme, loading, emptyMessage }) => {
+export const ModernTable = ({ data, columns, onRowPress, loading, emptyMessage, refreshControl }) => {
+    const { theme } = useAuth();
     const tTheme = themes[theme];
 
     if (loading) {
@@ -45,34 +47,37 @@ export const ModernTable = ({ data, columns, onRowPress, theme, loading, emptyMe
             </View>
 
             {/* Table Rows */}
-            {data.map((row, rowIdx) => (
-                <TouchableOpacity
-                    key={row.id || rowIdx}
-                    style={[
-                        modernStyles.tableRow,
-                        { backgroundColor: tTheme.card, borderBottomColor: tTheme.divider },
-                        rowIdx % 2 === 0 && { backgroundColor: tTheme.background }
-                    ]}
-                    onPress={() => onRowPress && onRowPress(row)}
-                    activeOpacity={0.7}
-                >
-                    {columns.map((col, colIdx) => (
-                        <View key={colIdx} style={[modernStyles.tableCell, { flex: col.flex || 1 }]}>
-                            {col.render ? col.render(row) : (
-                                <Text style={[modernStyles.tableCellText, { color: tTheme.text }]} numberOfLines={1}>
-                                    {row[col.key] || '-'}
-                                </Text>
-                            )}
-                        </View>
-                    ))}
-                </TouchableOpacity>
-            ))}
+            <View>
+                {data.map((row, rowIdx) => (
+                    <TouchableOpacity
+                        key={row.id || rowIdx}
+                        style={[
+                            modernStyles.tableRow,
+                            { backgroundColor: tTheme.card, borderBottomColor: tTheme.divider },
+                            rowIdx % 2 === 0 && { backgroundColor: tTheme.background }
+                        ]}
+                        onPress={() => onRowPress && onRowPress(row)}
+                        activeOpacity={0.7}
+                    >
+                        {columns.map((col, colIdx) => (
+                            <View key={colIdx} style={[modernStyles.tableCell, { flex: col.flex || 1 }]}>
+                                {col.render ? col.render(row) : (
+                                    <Text style={[modernStyles.tableCellText, { color: tTheme.text }]} numberOfLines={1}>
+                                        {row[col.key] || '-'}
+                                    </Text>
+                                )}
+                            </View>
+                        ))}
+                    </TouchableOpacity>
+                ))}
+            </View>
         </View>
     );
 };
 
 // ===== MODERN ACTION BUTTON =====
-export const ModernActionButton = ({ icon, label, onPress, variant = 'primary', theme, fullWidth = false, loading = false }) => {
+export const ModernActionButton = ({ icon, label, onPress, variant = 'primary', fullWidth = false, loading = false }) => {
+    const { theme } = useAuth();
     const tTheme = themes[theme];
 
     const getButtonStyle = () => {
@@ -121,7 +126,8 @@ export const ModernActionButton = ({ icon, label, onPress, variant = 'primary', 
 };
 
 // ===== MODERN SEARCH BAR =====
-export const ModernSearchBar = ({ value, onChangeText, placeholder, theme }) => {
+export const ModernSearchBar = ({ value, onChangeText, placeholder }) => {
+    const { theme } = useAuth();
     const tTheme = themes[theme];
 
     return (
@@ -144,7 +150,8 @@ export const ModernSearchBar = ({ value, onChangeText, placeholder, theme }) => 
 };
 
 // ===== MODERN FILTER CHIP =====
-export const ModernFilterChip = ({ label, active, onPress, theme }) => {
+export const ModernFilterChip = ({ label, active, onPress }) => {
+    const { theme } = useAuth();
     const tTheme = themes[theme];
 
     return (
@@ -170,44 +177,23 @@ export const ModernFilterChip = ({ label, active, onPress, theme }) => {
 };
 
 // ===== MODERN STATUS BADGE =====
-export const ModernStatusBadge = ({ status, theme }) => {
+export const ModernStatusBadge = ({ label, variant = 'default' }) => {
+    const { theme } = useAuth();
     const tTheme = themes[theme];
 
     const getStatusConfig = () => {
-        switch (status?.toLowerCase()) {
-            case 'paid':
-            case 'payé':
-            case 'completed':
-            case 'terminé':
-            case 'active':
-            case 'actif':
-                return { color: tTheme.success, icon: 'checkmark-circle', label: 'Payé' };
-            case 'pending':
-            case 'en_attente':
-            case 'awaiting_payment':
-                return { color: tTheme.warning, icon: 'time', label: 'En attente' };
-            case 'overdue':
-            case 'en_retard':
-            case 'late':
-                return { color: tTheme.danger, icon: 'alert-circle', label: 'En retard' };
-            case 'draft':
-            case 'brouillon':
-                return { color: tTheme.textSecondary, icon: 'document-outline', label: 'Brouillon' };
-            case 'cancelled':
-            case 'annulé':
-                return { color: tTheme.textSecondary, icon: 'close-circle', label: 'Annulé' };
-            // Stock statuses
-            case 'in_stock':
-            case 'disponible':
-                return { color: tTheme.success, icon: 'checkmark-circle', label: 'Disponible' };
-            case 'low_stock':
-            case 'faible':
-                return { color: tTheme.warning, icon: 'warning', label: 'Faible' };
-            case 'out_of_stock':
-            case 'rupture':
-                return { color: tTheme.error, icon: 'close-circle', label: 'Rupture' };
+        switch (variant) {
+            case 'success':
+                return { color: tTheme.success, icon: 'checkmark-circle' };
+            case 'warning':
+                return { color: tTheme.warning, icon: 'time' };
+            case 'error':
+            case 'danger':
+                return { color: tTheme.danger, icon: 'alert-circle' };
+            case 'info':
+                return { color: tTheme.primary, icon: 'information-circle' };
             default:
-                return { color: tTheme.textSecondary, icon: 'ellipse', label: status };
+                return { color: tTheme.textSecondary, icon: 'ellipse' };
         }
     };
 
@@ -217,14 +203,15 @@ export const ModernStatusBadge = ({ status, theme }) => {
         <View style={[modernStyles.statusBadge, { backgroundColor: `${config.color}15` }]}>
             <Ionicons name={config.icon} size={14} color={config.color} />
             <Text style={[modernStyles.statusBadgeText, { color: config.color }]}>
-                {config.label}
+                {label}
             </Text>
         </View>
     );
 };
 
 // ===== MODERN INFO CARD =====
-export const ModernInfoCard = ({ icon, title, value, subtitle, onPress, theme, color }) => {
+export const ModernInfoCard = ({ icon, title, value, subtitle, onPress, color }) => {
+    const { theme } = useAuth();
     const tTheme = themes[theme];
     const cardColor = color || tTheme.primary;
 

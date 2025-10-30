@@ -16,6 +16,7 @@ import AdministrationStack from './stacks/AdministrationStack';
 import AppSettingsStack from './stacks/AppSettingsStack';
 import CompanySettingsStack from './stacks/CompanySettingsStack';
 import DashboardStack from './stacks/DashboardStack';
+import FinanceStack from './stacks/FinanceStack';
 import PurchasesStack from './stacks/PurchasesStack';
 import SalesStack from './stacks/SalesStack';
 import StockStack from './stacks/StockStack';
@@ -37,11 +38,12 @@ const MainContent = React.memo(({ screen }) => {
                 return PurchasesStack;
             case 'Ventes':
                 return SalesStack;
+            case 'Finance':
+                return FinanceStack;
             case 'Réglages':
                 return AppSettingsStack;
             case 'Stock':
                 return StockStack;
-            // Add cases for Finance, etc. as you build their stacks
             default:
                 return () => <PlaceholderScreen title={screen} />;
         }
@@ -55,7 +57,7 @@ const MainContent = React.memo(({ screen }) => {
  * It orchestrates the entire responsive layout, including the sidebar and main content area.
  */
 function AppNavigatorContent() {
-    const { user, theme } = useAuth();
+    const { user, theme, loading } = useAuth();
     const [activeScreen, setActiveScreen] = useState('Dashboard');
     const { isSidebarVisible, toggleSidebar, closeSidebar } = useSidebar();
     const responsive = useResponsive();
@@ -104,6 +106,15 @@ function AppNavigatorContent() {
             isMobile && !isSidebarVisible && { left: '-100%' }
         ].filter(Boolean);
     }, [isMobile, isSidebarVisible, getSidebarWidth]);
+
+    // Show loading screen while checking authentication
+    if (loading) {
+        return (
+            <View style={[styles.container, { backgroundColor: tTheme.background, justifyContent: 'center', alignItems: 'center' }]}>
+                <Text style={{ color: tTheme.text, fontSize: 18 }}>Loading...</Text>
+            </View>
+        );
+    }
 
     // If no user is logged in, show the login screen
     if (!user) {
