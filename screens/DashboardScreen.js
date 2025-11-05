@@ -67,13 +67,13 @@ export default function DashboardScreen() {
         const { data, error } = await supabase.rpc('get_dashboard_stats');
         
         if (error) {
-            Alert.alert(t.error, "Impossible de charger les statistiques du tableau de bord.");
+            Alert.alert(t.error, t.loadingDashboard);
             console.error(error);
         } else if (data) {
             setStats(data[0]);
         }
         setLoading(false);
-    }, [t.error]);
+    }, [t.error, t.loadingDashboard]);
 
     useFocusEffect(
         useCallback(() => {

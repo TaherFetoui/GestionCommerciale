@@ -14,7 +14,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import { themes } from '../constants/AppConfig';
+import { themes, translations } from '../constants/AppConfig';
 import { useAuth } from '../context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
 import { supabase } from '../lib/supabase';
@@ -26,8 +26,9 @@ export default function LoginScreen() {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    const { signIn } = useAuth();
+    const { signIn, language } = useAuth();
     const { isMobile, width } = useResponsive();
+    const t = translations[language];
 
     // Animation refs
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -88,7 +89,7 @@ export default function LoginScreen() {
 
     const handleLogin = async () => {
         if (!email || !password) {
-            Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+            Alert.alert(t.error, t.fillAllFields);
             return;
         }
         setLoading(true);
@@ -97,14 +98,14 @@ export default function LoginScreen() {
             console.log('Login attempt:', { data, error });
             if (error) {
                 console.error('Login error:', error);
-                Alert.alert('Erreur de connexion', error.message || 'Une erreur est survenue lors de la connexion');
+                Alert.alert(t.loginError, error.message || t.unexpectedError);
             } else {
                 // Success - session is saved automatically
                 console.log('Login successful, session saved');
             }
         } catch (err) {
             console.error('Login exception:', err);
-            Alert.alert('Erreur', 'Une erreur inattendue est survenue');
+            Alert.alert(t.error, t.unexpectedError);
         } finally {
             setLoading(false);
         }
@@ -123,17 +124,17 @@ export default function LoginScreen() {
             
             if (error) {
                 if (error.message.includes('already registered')) {
-                    Alert.alert('Info', `L'utilisateur existe déjà!\n\nUtilisez:\nEmail: ${testEmail}\nPassword: ${testPassword}`);
+                    Alert.alert(t.error, `${t.userAlreadyExists}\n\n${t.use}:\n${t.email}: ${testEmail}\n${t.password}: ${testPassword}`);
                 } else {
-                    Alert.alert('Erreur', error.message);
+                    Alert.alert(t.error, error.message);
                 }
             } else {
-                Alert.alert('Succès ✅', `Utilisateur créé!\n\nEmail: ${testEmail}\nPassword: ${testPassword}`);
+                Alert.alert(t.success, `${t.userCreated}\n\n${t.email}: ${testEmail}\n${t.password}: ${testPassword}`);
                 setEmail(testEmail);
                 setPassword(testPassword);
             }
         } catch (err) {
-            Alert.alert('Erreur', err.message);
+            Alert.alert(t.error, err.message);
         }
     };
 

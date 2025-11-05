@@ -130,17 +130,17 @@ export default function StockScreen() {
         if (error) {
             Alert.alert(t.error, error.message);
         } else {
-            Alert.alert(t.success, 'Article supprimé avec succès!');
+            Alert.alert(t.success, t.articleDeleted);
             setDeleteModalVisible(false);
             setItemToDelete(null);
             fetchItems();
         }
-    }, [itemToDelete, t.error, t.success, fetchItems]);
+    }, [itemToDelete, t.error, t.success, t.articleDeleted, fetchItems]);
 
     // Save new article
     const handleSaveNewArticle = useCallback(async () => {
         if (!formName.trim()) {
-            Alert.alert(t.error, 'Le nom de l\'article est requis');
+            Alert.alert(t.error, t.articleNameRequired);
             return;
         }
 
@@ -163,16 +163,16 @@ export default function StockScreen() {
         if (error) {
             Alert.alert(t.error, error.message);
         } else {
-            Alert.alert(t.success, 'Article créé avec succès!');
+            Alert.alert(t.success, t.articleCreated);
             setCreateModalVisible(false);
             fetchItems();
         }
-    }, [formName, formReference, formSalePrice, formPurchasePrice, formVatRate, formStockQuantity, formDescription, user.id, t.error, t.success, fetchItems]);
+    }, [formName, formReference, formSalePrice, formPurchasePrice, formVatRate, formStockQuantity, formDescription, user.id, t.error, t.success, t.articleCreated, fetchItems]);
 
     // Update existing article
     const handleUpdateArticle = useCallback(async () => {
         if (!formName.trim()) {
-            Alert.alert(t.error, 'Le nom de l\'article est requis');
+            Alert.alert(t.error, t.articleNameRequired);
             return;
         }
 
@@ -195,11 +195,11 @@ export default function StockScreen() {
         if (error) {
             Alert.alert(t.error, error.message);
         } else {
-            Alert.alert(t.success, 'Article mis à jour avec succès!');
+            Alert.alert(t.success, t.articleUpdated);
             setEditModalVisible(false);
             fetchItems();
         }
-    }, [formName, formReference, formSalePrice, formPurchasePrice, formVatRate, formStockQuantity, formDescription, selectedItem, t.error, t.success, fetchItems]);
+    }, [formName, formReference, formSalePrice, formPurchasePrice, formVatRate, formStockQuantity, formDescription, selectedItem, t.error, t.success, t.articleUpdated, fetchItems]);
 
     useLayoutEffect(() => {
         navigation.setOptions({
@@ -283,7 +283,7 @@ export default function StockScreen() {
 
     const handleSaveAdjustment = async () => {
         if (!adjustmentQuantity || parseFloat(adjustmentQuantity) <= 0) {
-            Alert.alert(t.error, 'Veuillez entrer une quantité valide');
+            Alert.alert(t.error, t.enterValidQuantity);
             return;
         }
 
@@ -292,7 +292,7 @@ export default function StockScreen() {
         const newStock = adjustmentType === 'add' ? currentStock + quantity : currentStock - quantity;
 
         if (newStock < 0) {
-            Alert.alert(t.error, 'Le stock ne peut pas être négatif');
+            Alert.alert(t.error, t.stockCannotBeNegative);
             return;
         }
 
@@ -323,7 +323,7 @@ export default function StockScreen() {
             console.error('Error recording movement:', movementError);
         }
 
-        Alert.alert(t.success, 'Stock mis à jour avec succès!');
+        Alert.alert(t.success, t.stockUpdated);
         setAdjustModalVisible(false);
         fetchItems();
     };

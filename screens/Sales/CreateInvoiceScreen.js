@@ -20,11 +20,14 @@ import { supabase } from '../../lib/supabase';
 import { getGlobalStyles } from '../../styles/GlobalStyles';
 
 // Modern Form Components
-const FormSection = React.memo(({ title, children, theme }) => {
+const FormSection = React.memo(({ title, children, theme, rightButton }) => {
     const tTheme = themes[theme];
     return (
         <View style={[getGlobalStyles(theme).card, localStyles.section]}>
-            <Text style={[localStyles.sectionTitle, { color: tTheme.text }]}>{title}</Text>
+            <View style={localStyles.sectionHeader}>
+                <Text style={[localStyles.sectionTitle, { color: tTheme.text }]}>{title}</Text>
+                {rightButton}
+            </View>
             {children}
         </View>
     );
@@ -38,6 +41,7 @@ const FormInput = React.memo(({
     icon, 
     keyboardType = 'default',
     multiline = false,
+    numberOfLines = 1,
     theme,
     error = false
 }) => {
@@ -51,13 +55,17 @@ const FormInput = React.memo(({
             ]}>
                 {icon && <Ionicons name={icon} size={20} color={tTheme.textSecondary} style={localStyles.inputIcon} />}
                 <TextInput
-                    style={[localStyles.textInput, { color: tTheme.text, flex: 1 }]}
+                    style={[localStyles.textInput, { color: tTheme.text, flex: 1, minHeight: multiline ? 80 : 44 }]}
                     value={value}
                     onChangeText={onChangeText}
                     placeholder={placeholder}
                     placeholderTextColor={tTheme.textSecondary}
                     keyboardType={keyboardType}
                     multiline={multiline}
+                    numberOfLines={multiline ? numberOfLines : 1}
+                    textAlignVertical={multiline ? 'top' : 'center'}
+                    blurOnSubmit={false}
+                    onSubmitEditing={undefined}
                 />
             </View>
         </View>
@@ -155,28 +163,54 @@ const ActionButton = React.memo(({ onPress, icon, title, variant = 'primary', th
     );
 });
 
-export default function CreateInvoiceScreen({ navigation }) {
+export default function CreateInvoiceScreen({ navigation, route }) {
     const { user, theme, language } = useAuth();
     const { isDesktop, getColumns, getContentPadding } = useResponsive();
     const styles = getGlobalStyles(theme);
     const tTheme = themes[theme];
     const t = translations[language];
+    
+    // Check if editing existing invoice
+    const invoiceToEdit = route?.params?.invoiceToEdit;
+    const clientData = route?.params?.clientData;
+    const isEditing = !!invoiceToEdit;
+    
     // Form State
     const [clients, setClients] = useState([]);
-    const [selectedClientId, setSelectedClientId] = useState('');
-    const [invoiceNumber, setInvoiceNumber] = useState('');
-    const [issueDate, setIssueDate] = useState(new Date());
-    const [dueDate, setDueDate] = useState(new Date(new Date().setDate(new Date().getDate() + 30)));
-    const [paymentMethod, setPaymentMethod] = useState('Chèque');
-    const [lineItems, setLineItems] = useState([{ ref: '', description: '', quantity: '1', unitPrice: '0', vatRate: '19' }]);
-    const [fiscalStamp, setFiscalStamp] = useState('1.000');
+    const [selectedClientId, setSelectedClientId] = useState(invoiceToEdit?.client_id || '');
+    const [invoiceNumber, setInvoiceNumber] = useState(invoiceToEdit?.invoice_number || '');
+    const [issueDate, setIssueDate] = useState(invoiceToEdit ? new Date(invoiceToEdit.issue_date) : new Date());
+    const [dueDate, setDueDate] = useState(invoiceToEdit ? new Date(invoiceToEdit.due_date) : new Date(new Date().setDate(new Date().getDate() + 30)));
+    const [paymentMethod, setPaymentMethod] = useState(invoiceToEdit?.payment_method || 'Chèque');
+    const [lineItems, setLineItems] = useState(
+        invoiceToEdit?.items || [{ ref: '', description: '', quantity: '1', unitPrice: '0', vatRate: '19' }]
+    );
+    const [fiscalStamp, setFiscalStamp] = useState(invoiceToEdit?.fiscal_stamp?.toString() || '1.000');
     
     // UI State
     const [loading, setLoading] = useState(false);
     
+    // Update navigation title
+    useEffect(() => {
+        navigation.setOptions({
+            title: isEditing ? 'Modifier Facture' : 'Nouvelle Facture'
+        });
+    }, [navigation, isEditing]);
+    
     // Add LineItem component
     const LineItemCard = React.memo(({ item, index, onItemChange, onRemoveItem }) => {
         const itemTotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
+        const [localDescription, setLocalDescription] = useState(item.description);
+        
+        // Update local state when item changes from outside
+        useEffect(() => {
+            setLocalDescription(item.description);
+        }, [item.description]);
+        
+        const handleDescriptionChange = (text) => {
+            setLocalDescription(text);
+            onItemChange(index, 'description', text);
+        };
         
         return (
             <View style={[styles.card, localStyles.lineItemCard]}>
@@ -193,15 +227,36 @@ export default function CreateInvoiceScreen({ navigation }) {
                     </TouchableOpacity>
                 </View>
                 
-                <FormInput
-                    label={t.description || 'Description'}
-                    value={item.description}
-                    onChangeText={(val) => onItemChange(index, 'description', val)}
-                    placeholder={t.enterDescription || 'Enter item description'}
-                    icon="document-text-outline"
-                    theme={theme}
-                    multiline={true}
-                />
+                {/* Description - Direct TextInput */}
+                <View style={localStyles.inputContainer}>
+                    <Text style={[getGlobalStyles(theme).label, { color: tTheme.text }]}>
+                        {t.description || 'Description'}
+                    </Text>
+                    <View style={[
+                        localStyles.inputWrapper, 
+                        { backgroundColor: tTheme.card, borderColor: tTheme.border }
+                    ]}>
+                        <Ionicons name="document-text-outline" size={20} color={tTheme.textSecondary} style={localStyles.inputIcon} />
+                        <TextInput
+                            style={[localStyles.textInput, { 
+                                color: tTheme.text, 
+                                flex: 1, 
+                                minHeight: 80,
+                                maxHeight: 120,
+                                paddingTop: 12
+                            }]}
+                            value={localDescription}
+                            onChangeText={handleDescriptionChange}
+                            placeholder={t.enterDescription || 'Enter item description'}
+                            placeholderTextColor={tTheme.textSecondary}
+                            multiline={true}
+                            textAlignVertical="top"
+                            autoCorrect={false}
+                            autoCapitalize="sentences"
+                            scrollEnabled={true}
+                        />
+                    </View>
+                </View>
                 
                 <View style={localStyles.lineItemRow}>
                     <View style={localStyles.lineItemField}>
@@ -252,11 +307,11 @@ export default function CreateInvoiceScreen({ navigation }) {
     useEffect(() => {
         const fetchClients = async () => {
             const { data, error } = await supabase.from('clients').select('id, name');
-            if (error) Alert.alert('Error fetching clients', error.message);
+            if (error) Alert.alert(t.error, error.message);
             else setClients(data);
         };
         fetchClients();
-    }, []);
+    }, [t.error]);
     
     // --- Automatic Calculations ---
     const { totalHT, totalVAT, totalTTC, vatSummary } = useMemo(() => {
@@ -289,11 +344,13 @@ export default function CreateInvoiceScreen({ navigation }) {
     }, [lineItems, fiscalStamp]);
 
     // --- Line Item Handlers ---
-    const handleItemChange = (index, field, value) => {
-        const newItems = [...lineItems];
-        newItems[index][field] = value;
-        setLineItems(newItems);
-    };
+    const handleItemChange = useCallback((index, field, value) => {
+        setLineItems(prevItems => {
+            const newItems = [...prevItems];
+            newItems[index] = { ...newItems[index], [field]: value };
+            return newItems;
+        });
+    }, []);
 
     const handleAddItem = () => {
         setLineItems([...lineItems, { ref: '', description: '', quantity: '1', unitPrice: '0', vatRate: '19' }]);
@@ -366,11 +423,12 @@ export default function CreateInvoiceScreen({ navigation }) {
     // --- Save Invoice ---
     const handleSaveInvoice = async () => {
         if (!selectedClientId || !invoiceNumber) {
-            Alert.alert('Error', 'Please select a client and enter an invoice number.');
+            Alert.alert(t.error, t.pleaseSelectClient);
             return;
         }
         setLoading(true);
-        const { error } = await supabase.from('invoices').insert([{
+        
+        const invoiceData = {
             user_id: user.id,
             client_id: selectedClientId,
             invoice_number: invoiceNumber,
@@ -382,14 +440,38 @@ export default function CreateInvoiceScreen({ navigation }) {
             total_ht: totalHT,
             total_vat: totalVAT,
             total_amount: totalTTC, // Total TTC goes into the main amount column
-            status: 'awaiting_payment',
-        }]);
+        };
+        
+        let error;
+        if (isEditing) {
+            // Update existing invoice
+            const result = await supabase
+                .from('invoices')
+                .update(invoiceData)
+                .eq('id', invoiceToEdit.id);
+            error = result.error;
+        } else {
+            // Create new invoice
+            const result = await supabase
+                .from('invoices')
+                .insert([{ ...invoiceData, status: 'awaiting_payment' }]);
+            error = result.error;
+        }
 
         if (error) {
-            Alert.alert('Error creating invoice', error.message);
+            Alert.alert(t.error, error.message);
         } else {
-            Alert.alert('Success', 'Invoice created!');
-            navigation.goBack();
+            Alert.alert(
+                t.success, 
+                isEditing ? 'Facture modifiée avec succès' : t.invoiceCreated
+            );
+            if (isEditing) {
+                // Navigate back to invoice list after editing
+                navigation.navigate('InvoicesList');
+            } else {
+                // Go back after creating new invoice
+                navigation.goBack();
+            }
         }
         setLoading(false);
     };
@@ -457,7 +539,18 @@ export default function CreateInvoiceScreen({ navigation }) {
             </FormSection>
 
             {/* Line Items */}
-            <FormSection title={t.lineItems || 'Line Items'} theme={theme}>
+            <FormSection 
+                title={t.lineItems || 'Line Items'} 
+                theme={theme}
+                rightButton={
+                    <TouchableOpacity
+                        onPress={handleAddItem}
+                        style={[localStyles.addItemButton, { backgroundColor: tTheme.success }]}
+                    >
+                        <Ionicons name="add" size={24} color="#FFFFFF" />
+                    </TouchableOpacity>
+                }
+            >
                 {lineItems.map((item, index) => (
                     <LineItemCard
                         key={index}
@@ -467,14 +560,6 @@ export default function CreateInvoiceScreen({ navigation }) {
                         onRemoveItem={handleRemoveItem}
                     />
                 ))}
-                
-                <ActionButton
-                    onPress={handleAddItem}
-                    icon="add-circle-outline"
-                    title={t.addItem || 'Add Item'}
-                    variant="success"
-                    theme={theme}
-                />
             </FormSection>
 
             {/* Summary */}
@@ -500,10 +585,27 @@ const localStyles = StyleSheet.create({
     section: {
         marginBottom: 24,
     },
+    sectionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
     sectionTitle: {
         fontSize: 18,
         fontWeight: '700',
-        marginBottom: 16,
+    },
+    addItemButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
     },
     
     // Form input styles

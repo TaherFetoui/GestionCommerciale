@@ -131,7 +131,7 @@ export default function ClientsListScreen() {
     if (error) {
         Alert.alert(t.error, error.message);
     } else {
-        Alert.alert(t.success, "Client mis à jour.");
+        Alert.alert(t.success, t.clientUpdated);
         setIsModalVisible(false);
         fetchClients();
     }
@@ -140,8 +140,8 @@ export default function ClientsListScreen() {
 
   const confirmDeleteClient = () => {
     Alert.alert(
-        "Supprimer le Client",
-        `Êtes-vous sûr de vouloir supprimer "${selectedClient?.name}" ? Cette action est irréversible.`,
+        t.confirmDelete,
+        `${t.areYouSure} "${selectedClient?.name}" ?`,
         [
             { text: t.cancel, style: 'cancel' },
             { text: t.delete, style: 'destructive', onPress: () => handleDeleteClient() }
@@ -159,7 +159,7 @@ export default function ClientsListScreen() {
     if (error) {
         Alert.alert(t.error, error.message);
     } else {
-        Alert.alert(t.success, "Client supprimé.");
+        Alert.alert(t.success, t.clientDeleted);
         setIsModalVisible(false);
         fetchClients();
     }

@@ -96,7 +96,7 @@ export default function CompanyInfoScreen() {
         if (error) {
             Alert.alert(t.error, error.message);
         } else {
-            Alert.alert(t.success, 'Informations enregistrées.');
+            Alert.alert(t.success, t.infoSaved);
             setCompany({ ...draftCompany }); // Update main state
             handleCancel();
             fetchCompanyInfo(); // Re-fetch for consistency
