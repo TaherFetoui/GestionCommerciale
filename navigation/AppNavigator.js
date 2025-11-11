@@ -18,6 +18,7 @@ import CompanySettingsStack from './stacks/CompanySettingsStack';
 import DashboardStack from './stacks/DashboardStack';
 import FinanceStack from './stacks/FinanceStack';
 import PurchasesStack from './stacks/PurchasesStack';
+import ReportingStack from './stacks/ReportingStack';
 import SalesStack from './stacks/SalesStack';
 import StockStack from './stacks/StockStack';
 
@@ -40,6 +41,11 @@ const MainContent = React.memo(({ screen }) => {
                 return SalesStack;
             case 'Finance':
                 return FinanceStack;
+            case 'Pilotage':
+            case 'ReportingClients':
+            case 'ReportingFournisseurs':
+                // Utiliser une clé unique pour forcer le re-render
+                return () => <ReportingStack key={screen} initialScreen={screen} />;
             case 'Réglages':
                 return AppSettingsStack;
             case 'Stock':

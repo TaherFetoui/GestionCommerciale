@@ -76,30 +76,31 @@ export default function FinanceScreen() {
             route: 'BankAccounts',
             description: 'Configuration des comptes bancaires et caisses'
         },
-        {
-            id: 'supplier-fiscal-year',
-            title: 'Début exercice fournisseur',
-            icon: 'calendar-outline',
-            color: '#A8D8EA',
-            route: 'SupplierFiscalYear',
-            description: 'Paramétrage exercice comptable fournisseurs'
-        },
-        {
-            id: 'client-fiscal-year',
-            title: 'Début exercice client',
-            icon: 'calendar',
-            color: '#FFAAA5',
-            route: 'ClientFiscalYear',
-            description: 'Paramétrage exercice comptable clients'
-        },
-        {
-            id: 'cash-session',
-            title: 'Session de caisse',
-            icon: 'cash-outline',
-            color: '#FF8B94',
-            route: 'CashSession',
-            description: 'Ouverture/fermeture de caisse et gestion des fonds'
-        },
+        // Les sections suivantes sont masquées
+        // {
+        //     id: 'supplier-fiscal-year',
+        //     title: 'Début exercice fournisseur',
+        //     icon: 'calendar-outline',
+        //     color: '#A8D8EA',
+        //     route: 'SupplierFiscalYear',
+        //     description: 'Paramétrage exercice comptable fournisseurs'
+        // },
+        // {
+        //     id: 'client-fiscal-year',
+        //     title: 'Début exercice client',
+        //     icon: 'calendar',
+        //     color: '#FFAAA5',
+        //     route: 'ClientFiscalYear',
+        //     description: 'Paramétrage exercice comptable clients'
+        // },
+        // {
+        //     id: 'cash-session',
+        //     title: 'Session de caisse',
+        //     icon: 'cash-outline',
+        //     color: '#FF8B94',
+        //     route: 'CashSession',
+        //     description: 'Ouverture/fermeture de caisse et gestion des fonds'
+        // },
         {
             id: 'checks',
             title: 'Chèques',

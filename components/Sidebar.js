@@ -4,7 +4,6 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { themes, translations } from '../constants/AppConfig';
 import { useAuth } from '../context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
-import { supabase } from '../lib/supabase';
 
 const navItems = [
     { name: 'dashboard', icon: 'apps-outline', screen: 'Dashboard' },
@@ -24,20 +23,16 @@ export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
     const tTheme = themes[theme];
     const t = translations[language];
     const [profileName, setProfileName] = useState('');
+    const [reportingExpanded, setReportingExpanded] = useState(false);
 
     useEffect(() => {
         const fetchProfile = async () => {
             if (user) {
-                const { data } = await supabase
-                    .from('profiles')
-                    .select('full_name')
-                    .eq('id', user.id)
-                    .single();
-                
+                // Utiliser directement l'email de l'utilisateur
                 const capitalizeFirstLetter = (str) => str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
                 
-                if (data && data.full_name) {
-                    setProfileName(capitalizeFirstLetter(data.full_name));
+                if (user.user_metadata?.full_name) {
+                    setProfileName(capitalizeFirstLetter(user.user_metadata.full_name));
                 } else if (user.email) {
                     setProfileName(capitalizeFirstLetter(user.email.split('@')[0]));
                 }
@@ -46,7 +41,13 @@ export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
         fetchProfile();
     }, [user]);
 
-    const handleNavigate = (screen) => {
+    const handleNavigate = (screen, subScreen = null) => {
+        if (screen === 'Pilotage' && !subScreen) {
+            // Toggle reporting submenu
+            setReportingExpanded(!reportingExpanded);
+            return;
+        }
+        
         setActiveScreen(screen);
         if (isMobile) {
             onClose();
@@ -72,19 +73,82 @@ export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
 
             <View style={styles.navContainer}>
                 {navItems.map((item) => (
-                    <TouchableOpacity
-                        key={item.name}
-                        style={[
-                            styles.navItem,
-                            activeScreen === item.screen && { backgroundColor: tTheme.sidebarActiveBackground }
-                        ]}
-                        onPress={() => handleNavigate(item.screen)}
-                    >
-                        <Ionicons name={item.icon} size={22} color={activeScreen === item.screen ? tTheme.sidebarActiveText : tTheme.sidebarText} />
-                        <Text style={[styles.navText, { color: activeScreen === item.screen ? tTheme.sidebarActiveText : tTheme.sidebarText }]}>
-                            {t[item.name]}
-                        </Text>
-                    </TouchableOpacity>
+                    <View key={item.name}>
+                        <TouchableOpacity
+                            style={[
+                                styles.navItem,
+                                (activeScreen === item.screen || (item.screen === 'Pilotage' && reportingExpanded)) && 
+                                { backgroundColor: tTheme.sidebarActiveBackground }
+                            ]}
+                            onPress={() => handleNavigate(item.screen)}
+                        >
+                            <Ionicons 
+                                name={item.icon} 
+                                size={22} 
+                                color={activeScreen === item.screen ? tTheme.sidebarActiveText : tTheme.sidebarText} 
+                            />
+                            <Text style={[
+                                styles.navText, 
+                                { color: activeScreen === item.screen ? tTheme.sidebarActiveText : tTheme.sidebarText }
+                            ]}>
+                                {t[item.name]}
+                            </Text>
+                            {item.screen === 'Pilotage' && (
+                                <Ionicons 
+                                    name={reportingExpanded ? "chevron-down" : "chevron-forward"} 
+                                    size={18} 
+                                    color={tTheme.sidebarText}
+                                />
+                            )}
+                        </TouchableOpacity>
+                        
+                        {/* Sous-menu Reporting */}
+                        {item.screen === 'Pilotage' && reportingExpanded && (
+                            <View style={styles.submenu}>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.submenuItem,
+                                        activeScreen === 'ReportingClients' && 
+                                        { backgroundColor: tTheme.sidebarActiveBackground }
+                                    ]}
+                                    onPress={() => handleNavigate('ReportingClients')}
+                                >
+                                    <Ionicons 
+                                        name="people-outline" 
+                                        size={20} 
+                                        color={activeScreen === 'ReportingClients' ? tTheme.sidebarActiveText : tTheme.sidebarText} 
+                                    />
+                                    <Text style={[
+                                        styles.submenuText,
+                                        { color: activeScreen === 'ReportingClients' ? tTheme.sidebarActiveText : tTheme.sidebarText }
+                                    ]}>
+                                        Clients
+                                    </Text>
+                                </TouchableOpacity>
+                                
+                                <TouchableOpacity
+                                    style={[
+                                        styles.submenuItem,
+                                        activeScreen === 'ReportingFournisseurs' && 
+                                        { backgroundColor: tTheme.sidebarActiveBackground }
+                                    ]}
+                                    onPress={() => handleNavigate('ReportingFournisseurs')}
+                                >
+                                    <Ionicons 
+                                        name="business-outline" 
+                                        size={20} 
+                                        color={activeScreen === 'ReportingFournisseurs' ? tTheme.sidebarActiveText : tTheme.sidebarText} 
+                                    />
+                                    <Text style={[
+                                        styles.submenuText,
+                                        { color: activeScreen === 'ReportingFournisseurs' ? tTheme.sidebarActiveText : tTheme.sidebarText }
+                                    ]}>
+                                        Fournisseurs
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </View>
                 ))}
             </View>
 
@@ -144,6 +208,23 @@ const styles = StyleSheet.create({
         fontWeight: '500',
         flex: 1,
         minWidth: 0,
+    },
+    submenu: {
+        paddingLeft: 20,
+        marginTop: 2,
+    },
+    submenuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        marginBottom: 2,
+    },
+    submenuText: {
+        fontSize: 12,
+        marginLeft: 10,
+        fontWeight: '400',
     },
     footer: { 
         paddingVertical: 14, 

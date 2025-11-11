@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { View, TextInput, StyleSheet, Alert, ScrollView, Text, TouchableOpacity } from 'react-native';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../context/AuthContext';
-import { themes, translations } from '../../constants/AppConfig';
 import { Ionicons } from '@expo/vector-icons';
+import { Picker } from '@react-native-picker/picker';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { themes, translations } from '../../constants/AppConfig';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 export default function CreateArticleScreen({ navigation }) {
     const [name, setName] = useState('');
@@ -12,11 +13,35 @@ export default function CreateArticleScreen({ navigation }) {
     const [purchasePrice, setPurchasePrice] = useState('');
     const [vatRate, setVatRate] = useState('19');
     const [stock, setStock] = useState('0');
+    const [supplierId, setSupplierId] = useState('');
+    const [suppliers, setSuppliers] = useState([]);
     
     const [loading, setLoading] = useState(false);
+    const [initialLoading, setInitialLoading] = useState(true);
     const { user, theme, language } = useAuth();
     const tTheme = themes[theme];
     const t = translations[language];
+
+    useEffect(() => {
+        fetchSuppliers();
+    }, []);
+
+    const fetchSuppliers = async () => {
+        setInitialLoading(true);
+        const { data, error } = await supabase
+            .from('suppliers')
+            .select('id, name')
+            .eq('user_id', user.id)
+            .order('name');
+            
+        if (error) {
+            console.error('Error fetching suppliers:', error);
+            Alert.alert(t.error || 'Erreur', 'Impossible de charger les fournisseurs');
+        } else {
+            setSuppliers(data || []);
+        }
+        setInitialLoading(false);
+    };
 
     const handleSave = async () => {
         if (!name || !salePrice) {
@@ -34,6 +59,7 @@ export default function CreateArticleScreen({ navigation }) {
                 purchase_price: parseFloat(purchasePrice) || 0,
                 vat_rate: parseFloat(vatRate) || 0,
                 stock_quantity: parseFloat(stock) || 0,
+                supplier_id: supplierId || null,
             }]);
 
         if (error) {
@@ -45,6 +71,15 @@ export default function CreateArticleScreen({ navigation }) {
         setLoading(false);
     };
 
+    if (initialLoading) {
+        return (
+            <View style={[styles.container, styles.centered, { backgroundColor: tTheme.background }]}>
+                <ActivityIndicator size="large" color={tTheme.primary} />
+                <Text style={[styles.loadingText, { color: tTheme.textSecondary }]}>Chargement...</Text>
+            </View>
+        );
+    }
+
     return (
         <ScrollView style={[styles.container, { backgroundColor: tTheme.background }]}>
             <Text style={[styles.label, { color: tTheme.text }]}>{t.itemName} *</Text>
@@ -52,6 +87,23 @@ export default function CreateArticleScreen({ navigation }) {
             
             <Text style={[styles.label, { color: tTheme.text }]}>{t.reference}</Text>
             <TextInput style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text }]} value={reference} onChangeText={setReference} />
+
+            <Text style={[styles.label, { color: tTheme.text }]}>Fournisseur</Text>
+            <View style={[styles.pickerContainer, { backgroundColor: tTheme.card, borderColor: '#ccc' }]}>
+                <Picker
+                    selectedValue={supplierId || '__empty__'}
+                    onValueChange={(value) => {
+                        const actualValue = value === '__empty__' ? '' : value;
+                        setSupplierId(actualValue);
+                    }}
+                    style={{ color: tTheme.text }}
+                >
+                    <Picker.Item label="-- Sélectionner un fournisseur (optionnel) --" value="__empty__" />
+                    {suppliers.map(supplier => (
+                        <Picker.Item key={supplier.id} label={supplier.name} value={supplier.id} />
+                    ))}
+                </Picker>
+            </View>
 
             <View style={styles.row}>
                 <View style={styles.column}>
@@ -85,8 +137,16 @@ export default function CreateArticleScreen({ navigation }) {
 
 const styles = StyleSheet.create({
     container: { flex: 1, padding: 20 },
+    centered: { justifyContent: 'center', alignItems: 'center' },
+    loadingText: { marginTop: 12, fontSize: 16 },
     label: { fontSize: 16, marginBottom: 8, fontWeight: 'bold' },
     input: { borderWidth: 1, borderColor: '#ccc', padding: 12, marginBottom: 18, borderRadius: 8, fontSize: 16 },
+    pickerContainer: { 
+        borderWidth: 1, 
+        borderRadius: 8, 
+        marginBottom: 18,
+        overflow: 'hidden'
+    },
     row: { flexDirection: 'row', justifyContent: 'space-between' },
     column: { flex: 1, marginRight: 10 },
     saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 15, borderRadius: 30, elevation: 3, marginTop: 10, marginBottom: 40 },

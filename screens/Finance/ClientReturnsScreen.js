@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Picker } from '@react-native-picker/picker';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useCallback, useLayoutEffect, useState } from 'react';
 import {
@@ -27,6 +28,7 @@ export default function ClientReturnsScreen() {
     const navigation = useNavigation();
     const [returns, setReturns] = useState([]);
     const [filteredReturns, setFilteredReturns] = useState([]);
+    const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -70,6 +72,20 @@ export default function ClientReturnsScreen() {
 
     const fetchReturns = useCallback(async () => {
         setLoading(true);
+        
+        // Récupérer les clients
+        const { data: clientsData, error: clientsError } = await supabase
+            .from('clients')
+            .select('*')
+            .order('name', { ascending: true });
+        
+        if (clientsError) {
+            console.error('Error fetching clients:', clientsError);
+        } else {
+            setClients(clientsData || []);
+        }
+        
+        // Récupérer les retenues
         const { data, error } = await supabase
             .from('client_returns')
             .select('*')
@@ -225,14 +241,14 @@ export default function ClientReturnsScreen() {
 
     // Table configuration
     const tableColumns = [
-        { key: 'client', label: 'Client', width: 200 },
-        { key: 'invoice_number', label: 'N° Facture', width: 150 },
-        { key: 'invoice_amount', label: 'Montant Facture', width: 150, align: 'right' },
-        { key: 'retention_rate', label: 'Taux (%)', width: 100, align: 'center' },
-        { key: 'retention_amount', label: 'Montant Retenue', width: 150, align: 'right' },
-        { key: 'retention_date', label: 'Date', width: 120 },
-        { key: 'status', label: 'Statut', width: 120 },
-        { key: 'actions', label: 'Actions', width: 150 },
+        { key: 'client', label: 'Client', width: 250 },
+        { key: 'invoice_number', label: 'N° Facture', width: 180 },
+        { key: 'invoice_amount', label: 'Montant Facture', width: 180, align: 'right' },
+        { key: 'retention_rate', label: 'Taux Retenue (%)', width: 150, align: 'center' },
+        { key: 'retention_amount', label: 'Montant Retenue', width: 180, align: 'right' },
+        { key: 'retention_date', label: 'Date Retenue', width: 150 },
+        { key: 'status', label: 'Statut', width: 140 },
+        { key: 'actions', label: 'Actions', width: 120 },
     ];
 
     const getStatusInfo = (status) => {
@@ -277,13 +293,19 @@ export default function ClientReturnsScreen() {
     const renderForm = (isEdit = false) => (
         <View>
             <Text style={[styles.label, { color: tTheme.text }]}>Client *</Text>
-            <TextInput
-                style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text, borderColor: tTheme.border }]}
-                placeholder="Nom du client"
-                placeholderTextColor={tTheme.textSecondary}
-                value={formClient}
-                onChangeText={setFormClient}
-            />
+            <View style={[styles.input, { backgroundColor: tTheme.card, borderColor: tTheme.border, padding: 0 }]}>
+                <Picker
+                    selectedValue={formClient}
+                    onValueChange={(itemValue) => setFormClient(itemValue)}
+                    style={{ color: tTheme.text }}
+                    dropdownIconColor={tTheme.text}
+                >
+                    <Picker.Item label="-- Sélectionner un client --" value="" />
+                    {clients.map(client => (
+                        <Picker.Item key={client.id} label={client.name} value={client.name} />
+                    ))}
+                </Picker>
+            </View>
 
             <Text style={[styles.label, { color: tTheme.text }]}>Numéro de facture *</Text>
             <TextInput
@@ -401,17 +423,21 @@ export default function ClientReturnsScreen() {
                 </ScrollView>
             </View>
 
-            {/* Table */}
-            <ModernTable
-                columns={tableColumns}
-                data={filteredReturns}
-                renderRow={renderTableRow}
-                loading={loading}
-                emptyMessage="Aucune retenue client trouvée"
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                }
-            />
+            {/* Table avec scroll horizontal */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ flex: 1 }}>
+                <View style={{ minWidth: 1350 }}>
+                    <ModernTable
+                        columns={tableColumns}
+                        data={filteredReturns}
+                        renderRow={renderTableRow}
+                        loading={loading}
+                        emptyMessage="Aucune retenue client trouvée"
+                        refreshControl={
+                            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                        }
+                    />
+                </View>
+            </ScrollView>
 
             {/* Create Modal */}
             <Modal

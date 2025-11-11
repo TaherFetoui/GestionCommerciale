@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Picker } from '@react-native-picker/picker';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useCallback, useLayoutEffect, useState } from 'react';
 import { Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -12,6 +13,7 @@ export default function ClientPaymentOrdersScreen() {
     const navigation = useNavigation();
     const [orders, setOrders] = useState([]);
     const [filteredOrders, setFilteredOrders] = useState([]);
+    const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -48,7 +50,25 @@ export default function ClientPaymentOrdersScreen() {
 
     const fetchOrders = useCallback(async () => {
         setLoading(true);
-        const { data, error } = await supabase.from('client_payment_orders').select('*').order('created_at', { ascending: false });
+        
+        // Récupérer les clients
+        const { data: clientsData, error: clientsError } = await supabase
+            .from('clients')
+            .select('*')
+            .order('name', { ascending: true });
+        
+        if (clientsError) {
+            console.error('Error fetching clients:', clientsError);
+        } else {
+            setClients(clientsData || []);
+        }
+        
+        // Récupérer les ordres de paiement
+        const { data, error } = await supabase
+            .from('client_payment_orders')
+            .select('*')
+            .order('created_at', { ascending: false });
+            
         if (error) console.error('Error:', error);
         else {
             setOrders(data || []);
@@ -62,7 +82,7 @@ export default function ClientPaymentOrdersScreen() {
 
     const applyFilters = useCallback((data, search, status) => {
         let filtered = [...data];
-        if (search) filtered = filtered.filter(item => item.order_number?.toLowerCase().includes(search.toLowerCase()) || item.client_name?.toLowerCase().includes(search.toLowerCase()));
+        if (search) filtered = filtered.filter(item => item.order_number?.toLowerCase().includes(search.toLowerCase()) || item.client?.toLowerCase().includes(search.toLowerCase()));
         if (status !== 'all') filtered = filtered.filter(item => item.status === status);
         setFilteredOrders(filtered);
     }, []);
@@ -86,12 +106,12 @@ export default function ClientPaymentOrdersScreen() {
     const handleEditOrder = useCallback((item) => {
         setSelectedOrder(item);
         setFormOrderNumber(item.order_number || '');
-        setFormClient(item.client_name || '');
+        setFormClient(item.client || '');
         setFormAmount(item.amount?.toString() || '');
         setFormPaymentMethod(item.payment_method || 'check');
         setFormBankAccount(item.bank_account || '');
-        setFormReceiptDate(item.receipt_date || '');
-        setFormInvoiceRef(item.invoice_reference || '');
+        setFormReceiptDate(item.payment_date || '');
+        setFormInvoiceRef(item.reference || '');
         setFormStatus(item.status || 'pending');
         setFormNote(item.note || '');
         setEditModalVisible(true);
@@ -113,12 +133,12 @@ export default function ClientPaymentOrdersScreen() {
         setSaveLoading(true);
         const { error } = await supabase.from('client_payment_orders').insert([{
             order_number: formOrderNumber,
-            client_name: formClient,
+            client: formClient,
             amount: parseFloat(formAmount),
             payment_method: formPaymentMethod,
             bank_account: formBankAccount,
-            receipt_date: formReceiptDate || null,
-            invoice_reference: formInvoiceRef,
+            payment_date: formReceiptDate || null,
+            reference: formInvoiceRef,
             status: formStatus,
             note: formNote,
             created_by: user?.id,
@@ -133,12 +153,12 @@ export default function ClientPaymentOrdersScreen() {
         setSaveLoading(true);
         const { error } = await supabase.from('client_payment_orders').update({
             order_number: formOrderNumber,
-            client_name: formClient,
+            client: formClient,
             amount: parseFloat(formAmount),
             payment_method: formPaymentMethod,
             bank_account: formBankAccount,
-            receipt_date: formReceiptDate || null,
-            invoice_reference: formInvoiceRef,
+            payment_date: formReceiptDate || null,
+            reference: formInvoiceRef,
             status: formStatus,
             note: formNote,
         }).eq('id', selectedOrder.id);
@@ -149,10 +169,10 @@ export default function ClientPaymentOrdersScreen() {
 
     const tableColumns = [
         { key: 'order_number', label: 'N° Ordre', width: 140 },
-        { key: 'client_name', label: 'Client', width: 180 },
+        { key: 'client', label: 'Client', width: 180 },
         { key: 'amount', label: 'Montant', width: 120, align: 'right' },
         { key: 'payment_method', label: 'Méthode', width: 120 },
-        { key: 'receipt_date', label: 'Date', width: 120 },
+        { key: 'payment_date', label: 'Date', width: 120 },
         { key: 'status', label: 'Statut', width: 120 },
         { key: 'actions', label: 'Actions', width: 150 },
     ];
@@ -163,10 +183,10 @@ export default function ClientPaymentOrdersScreen() {
 
     const renderTableRow = (item) => ({
         order_number: item.order_number || '-',
-        client_name: item.client_name || '-',
+        client: item.client || '-',
         amount: `${parseFloat(item.amount || 0).toFixed(3)} TND`,
         payment_method: getPaymentMethodLabel(item.payment_method),
-        receipt_date: item.receipt_date || '-',
+        payment_date: item.payment_date || '-',
         status: <ModernStatusBadge label={getStatusLabel(item.status)} variant={getStatusVariant(item.status)} />,
         actions: (
             <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -180,8 +200,22 @@ export default function ClientPaymentOrdersScreen() {
         <ScrollView style={{ maxHeight: 500 }}>
             <Text style={[styles.label, { color: tTheme.text }]}>N° Ordre</Text>
             <TextInput style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text, borderColor: tTheme.border }]} value={formOrderNumber} editable={false} />
+            
             <Text style={[styles.label, { color: tTheme.text }]}>Client *</Text>
-            <TextInput style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text, borderColor: tTheme.border }]} placeholder="Nom du client" placeholderTextColor={tTheme.textSecondary} value={formClient} onChangeText={setFormClient} />
+            <View style={[styles.input, { backgroundColor: tTheme.card, borderColor: tTheme.border, padding: 0 }]}>
+                <Picker
+                    selectedValue={formClient}
+                    onValueChange={(itemValue) => setFormClient(itemValue)}
+                    style={{ color: tTheme.text }}
+                    dropdownIconColor={tTheme.text}
+                >
+                    <Picker.Item label="-- Sélectionner un client --" value="" />
+                    {clients.map(client => (
+                        <Picker.Item key={client.id} label={client.name} value={client.name} />
+                    ))}
+                </Picker>
+            </View>
+            
             <Text style={[styles.label, { color: tTheme.text }]}>Montant *</Text>
             <TextInput style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text, borderColor: tTheme.border }]} placeholder="0.000" placeholderTextColor={tTheme.textSecondary} value={formAmount} onChangeText={setFormAmount} keyboardType="decimal-pad" />
             <Text style={[styles.label, { color: tTheme.text }]}>Méthode de paiement</Text>

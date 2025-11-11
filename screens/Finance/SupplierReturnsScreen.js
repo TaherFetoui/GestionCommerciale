@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Picker } from '@react-native-picker/picker';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useCallback, useLayoutEffect, useState } from 'react';
 import {
@@ -27,6 +28,8 @@ export default function SupplierReturnsScreen() {
     const navigation = useNavigation();
     const [returns, setReturns] = useState([]);
     const [filteredReturns, setFilteredReturns] = useState([]);
+    const [suppliers, setSuppliers] = useState([]);
+    const [supplierInvoices, setSupplierInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -38,6 +41,7 @@ export default function SupplierReturnsScreen() {
 
     // Form states
     const [formSupplier, setFormSupplier] = useState('');
+    const [formSupplierId, setFormSupplierId] = useState('');
     const [formInvoiceNumber, setFormInvoiceNumber] = useState('');
     const [formRetentionRate, setFormRetentionRate] = useState('1.5');
     const [formRetentionAmount, setFormRetentionAmount] = useState('');
@@ -70,6 +74,20 @@ export default function SupplierReturnsScreen() {
 
     const fetchReturns = useCallback(async () => {
         setLoading(true);
+        
+        // Récupérer les fournisseurs
+        const { data: suppliersData, error: suppliersError } = await supabase
+            .from('suppliers')
+            .select('*')
+            .order('name', { ascending: true });
+        
+        if (suppliersError) {
+            console.error('Error fetching suppliers:', suppliersError);
+        } else {
+            setSuppliers(suppliersData || []);
+        }
+        
+        // Récupérer les retenues
         const { data, error } = await supabase
             .from('supplier_returns')
             .select('*')
@@ -95,6 +113,70 @@ export default function SupplierReturnsScreen() {
         await fetchReturns();
         setRefreshing(false);
     }, [fetchReturns]);
+
+    // Fonction pour récupérer les factures d'un fournisseur
+    const fetchSupplierInvoices = async (supplierId) => {
+        if (!supplierId) {
+            setSupplierInvoices([]);
+            return;
+        }
+
+        const { data, error } = await supabase
+            .from('purchase_orders')
+            .select('*')
+            .eq('supplier_id', supplierId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching supplier invoices:', error);
+            setSupplierInvoices([]);
+        } else {
+            setSupplierInvoices(data || []);
+        }
+    };
+
+    // Gérer le changement de fournisseur
+    const handleSupplierChange = async (supplierId, supplierName) => {
+        setFormSupplierId(supplierId);
+        setFormSupplier(supplierName);
+        setFormInvoiceNumber('');
+        setFormInvoiceAmount('');
+        setFormRetentionAmount('');
+        
+        if (supplierId) {
+            await fetchSupplierInvoices(supplierId);
+        } else {
+            setSupplierInvoices([]);
+        }
+    };
+
+    // Gérer le changement de facture
+    const handleInvoiceChange = (invoiceId) => {
+        const selectedInvoice = supplierInvoices.find(inv => inv.id === invoiceId);
+        if (selectedInvoice) {
+            setFormInvoiceNumber(selectedInvoice.order_number || '');
+            setFormInvoiceAmount(selectedInvoice.total_amount?.toString() || '');
+            
+            // Calculer automatiquement le montant de la retenue
+            const amount = parseFloat(selectedInvoice.total_amount || 0);
+            const rate = parseFloat(formRetentionRate || 0);
+            const retention = (amount * rate) / 100;
+            setFormRetentionAmount(retention.toFixed(3));
+        }
+    };
+
+    // Gérer le changement du taux de retenue
+    const handleRetentionRateChange = (rate) => {
+        setFormRetentionRate(rate);
+        
+        // Recalculer le montant de la retenue si le montant de facture existe
+        if (formInvoiceAmount) {
+            const amount = parseFloat(formInvoiceAmount || 0);
+            const rateValue = parseFloat(rate || 0);
+            const retention = (amount * rateValue) / 100;
+            setFormRetentionAmount(retention.toFixed(3));
+        }
+    };
 
     // Filter and search logic
     useCallback(() => {
@@ -225,14 +307,14 @@ export default function SupplierReturnsScreen() {
 
     // Table configuration
     const tableColumns = [
-        { key: 'supplier', label: 'Fournisseur', width: 200 },
-        { key: 'invoice_number', label: 'N° Facture', width: 150 },
-        { key: 'invoice_amount', label: 'Montant Facture', width: 150, align: 'right' },
-        { key: 'retention_rate', label: 'Taux (%)', width: 100, align: 'center' },
-        { key: 'retention_amount', label: 'Montant Retenue', width: 150, align: 'right' },
-        { key: 'retention_date', label: 'Date', width: 120 },
-        { key: 'status', label: 'Statut', width: 120 },
-        { key: 'actions', label: 'Actions', width: 150 },
+        { key: 'supplier', label: 'Fournisseur', width: 250 },
+        { key: 'invoice_number', label: 'N° Facture', width: 180 },
+        { key: 'invoice_amount', label: 'Montant Facture', width: 180, align: 'right' },
+        { key: 'retention_rate', label: 'Taux Retenue (%)', width: 150, align: 'center' },
+        { key: 'retention_amount', label: 'Montant Retenue', width: 180, align: 'right' },
+        { key: 'retention_date', label: 'Date Retenue', width: 150 },
+        { key: 'status', label: 'Statut', width: 140 },
+        { key: 'actions', label: 'Actions', width: 120 },
     ];
 
     const getStatusInfo = (status) => {
@@ -277,22 +359,45 @@ export default function SupplierReturnsScreen() {
     const renderForm = (isEdit = false) => (
         <View>
             <Text style={[styles.label, { color: tTheme.text }]}>Fournisseur *</Text>
-            <TextInput
-                style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text, borderColor: tTheme.border }]}
-                placeholder="Nom du fournisseur"
-                placeholderTextColor={tTheme.textSecondary}
-                value={formSupplier}
-                onChangeText={setFormSupplier}
-            />
+            <View style={[styles.input, { backgroundColor: tTheme.card, borderColor: tTheme.border, padding: 0 }]}>
+                <Picker
+                    selectedValue={formSupplierId}
+                    onValueChange={(itemValue) => {
+                        const supplier = suppliers.find(s => s.id === itemValue);
+                        if (supplier) {
+                            handleSupplierChange(itemValue, supplier.name);
+                        }
+                    }}
+                    style={{ color: tTheme.text }}
+                    dropdownIconColor={tTheme.text}
+                    enabled={!isEdit}
+                >
+                    <Picker.Item label="-- Sélectionner un fournisseur --" value="" />
+                    {suppliers.map(supplier => (
+                        <Picker.Item key={supplier.id} label={supplier.name} value={supplier.id} />
+                    ))}
+                </Picker>
+            </View>
 
             <Text style={[styles.label, { color: tTheme.text }]}>Numéro de facture *</Text>
-            <TextInput
-                style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text, borderColor: tTheme.border }]}
-                placeholder="Ex: FAC-2025-001"
-                placeholderTextColor={tTheme.textSecondary}
-                value={formInvoiceNumber}
-                onChangeText={setFormInvoiceNumber}
-            />
+            <View style={[styles.input, { backgroundColor: tTheme.card, borderColor: tTheme.border, padding: 0 }]}>
+                <Picker
+                    selectedValue={formInvoiceNumber}
+                    onValueChange={(itemValue) => handleInvoiceChange(itemValue)}
+                    style={{ color: tTheme.text }}
+                    dropdownIconColor={tTheme.text}
+                    enabled={supplierInvoices.length > 0 && !isEdit}
+                >
+                    <Picker.Item label="-- Sélectionner une facture --" value="" />
+                    {supplierInvoices.map(invoice => (
+                        <Picker.Item 
+                            key={invoice.id} 
+                            label={`${invoice.order_number} - ${parseFloat(invoice.total_amount || 0).toFixed(3)} DT`} 
+                            value={invoice.id} 
+                        />
+                    ))}
+                </Picker>
+            </View>
 
             <Text style={[styles.label, { color: tTheme.text }]}>Montant de la facture</Text>
             <TextInput
@@ -302,6 +407,7 @@ export default function SupplierReturnsScreen() {
                 value={formInvoiceAmount}
                 onChangeText={setFormInvoiceAmount}
                 keyboardType="decimal-pad"
+                editable={false}
             />
 
             <Text style={[styles.label, { color: tTheme.text }]}>Taux de retenue (%)</Text>
@@ -310,11 +416,11 @@ export default function SupplierReturnsScreen() {
                 placeholder="1.5"
                 placeholderTextColor={tTheme.textSecondary}
                 value={formRetentionRate}
-                onChangeText={setFormRetentionRate}
+                onChangeText={handleRetentionRateChange}
                 keyboardType="decimal-pad"
             />
 
-            <Text style={[styles.label, { color: tTheme.text }]}>Montant de la retenue *</Text>
+            <Text style={[styles.label, { color: tTheme.text }]}>Montant de la retenue</Text>
             <TextInput
                 style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text, borderColor: tTheme.border }]}
                 placeholder="0.000"
@@ -322,6 +428,7 @@ export default function SupplierReturnsScreen() {
                 value={formRetentionAmount}
                 onChangeText={setFormRetentionAmount}
                 keyboardType="decimal-pad"
+                editable={false}
             />
 
             <Text style={[styles.label, { color: tTheme.text }]}>Date de retenue</Text>
@@ -401,17 +508,21 @@ export default function SupplierReturnsScreen() {
                 </ScrollView>
             </View>
 
-            {/* Table */}
-            <ModernTable
-                columns={tableColumns}
-                data={filteredReturns}
-                renderRow={renderTableRow}
-                loading={loading}
-                emptyMessage="Aucune retenue fournisseur trouvée"
-                refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-                }
-            />
+            {/* Table avec scroll horizontal */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ flex: 1 }}>
+                <View style={{ minWidth: 1350 }}>
+                    <ModernTable
+                        columns={tableColumns}
+                        data={filteredReturns}
+                        renderRow={renderTableRow}
+                        loading={loading}
+                        emptyMessage="Aucune retenue fournisseur trouvée"
+                        refreshControl={
+                            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                        }
+                    />
+                </View>
+            </ScrollView>
 
             {/* Create Modal */}
             <Modal
