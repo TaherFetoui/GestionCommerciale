@@ -104,10 +104,17 @@ export default function PurchaseOrderDetailsScreen({ route, navigation }) {
     }
 
     const items = order.items || [];
-    const totalHT = parseFloat(order.total_ht) || 0;
-    const totalVAT = parseFloat(order.total_vat) || 0;
+    
+    // Calculate totals from items
+    const totalHT = items.reduce((sum, item) => {
+        const quantity = parseFloat(item.quantity) || 0;
+        const price = parseFloat(item.purchase_price || item.unit_price) || 0;
+        return sum + (quantity * price);
+    }, 0);
+    
+    const totalVAT = totalHT * 0.19; // 19% VAT
     const fiscalStamp = parseFloat(order.fiscal_stamp) || 0;
-    const totalTTC = parseFloat(order.total_amount) || 0;
+    const totalTTC = totalHT + totalVAT + fiscalStamp;
 
     const currentStatus = statusOptions.find(s => s.value === order.status) || statusOptions[0];
 
@@ -203,28 +210,34 @@ export default function PurchaseOrderDetailsScreen({ route, navigation }) {
                     </View>
                     <View style={localStyles.cardContent}>
                         {items.length > 0 ? (
-                            items.map((item, index) => (
-                                <View 
-                                    key={index} 
-                                    style={[
-                                        localStyles.itemRow,
-                                        { borderBottomColor: tTheme.border },
-                                        index === items.length - 1 && localStyles.lastItemRow
-                                    ]}
-                                >
-                                    <View style={localStyles.itemLeft}>
-                                        <Text style={[localStyles.itemName, { color: tTheme.text }]}>
-                                            {item.article_name || item.description}
-                                        </Text>
-                                        <Text style={[localStyles.itemDetails, { color: tTheme.textSecondary }]}>
-                                            {item.quantity} × {formatNumber(item.unit_price)} TND
+                            items.map((item, index) => {
+                                const quantity = parseFloat(item.quantity) || 0;
+                                const price = parseFloat(item.purchase_price || item.unit_price) || 0;
+                                const subtotal = quantity * price;
+                                
+                                return (
+                                    <View 
+                                        key={index} 
+                                        style={[
+                                            localStyles.itemRow,
+                                            { borderBottomColor: tTheme.border },
+                                            index === items.length - 1 && localStyles.lastItemRow
+                                        ]}
+                                    >
+                                        <View style={localStyles.itemLeft}>
+                                            <Text style={[localStyles.itemName, { color: tTheme.text }]}>
+                                                {item.item_name || item.article_name || item.description || 'Article'}
+                                            </Text>
+                                            <Text style={[localStyles.itemDetails, { color: tTheme.textSecondary }]}>
+                                                {formatNumber(quantity)} × {formatNumber(price)} TND
+                                            </Text>
+                                        </View>
+                                        <Text style={[localStyles.itemTotal, { color: tTheme.text }]}>
+                                            {formatNumber(subtotal)} TND
                                         </Text>
                                     </View>
-                                    <Text style={[localStyles.itemTotal, { color: tTheme.text }]}>
-                                        {formatNumber(item.quantity * item.unit_price)} TND
-                                    </Text>
-                                </View>
-                            ))
+                                );
+                            })
                         ) : (
                             <Text style={[localStyles.emptyItems, { color: tTheme.textSecondary }]}>
                                 Aucun article

@@ -24,6 +24,7 @@ export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
     const t = translations[language];
     const [profileName, setProfileName] = useState('');
     const [reportingExpanded, setReportingExpanded] = useState(false);
+    const [administrationExpanded, setAdministrationExpanded] = useState(false);
 
     useEffect(() => {
         const fetchProfile = async () => {
@@ -45,6 +46,12 @@ export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
         if (screen === 'Pilotage' && !subScreen) {
             // Toggle reporting submenu
             setReportingExpanded(!reportingExpanded);
+            return;
+        }
+        
+        if (screen === 'Administration' && !subScreen) {
+            // Toggle administration submenu
+            setAdministrationExpanded(!administrationExpanded);
             return;
         }
         
@@ -77,7 +84,9 @@ export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
                         <TouchableOpacity
                             style={[
                                 styles.navItem,
-                                (activeScreen === item.screen || (item.screen === 'Pilotage' && reportingExpanded)) && 
+                                (activeScreen === item.screen || 
+                                 (item.screen === 'Pilotage' && reportingExpanded) ||
+                                 (item.screen === 'Administration' && administrationExpanded)) && 
                                 { backgroundColor: tTheme.sidebarActiveBackground }
                             ]}
                             onPress={() => handleNavigate(item.screen)}
@@ -93,14 +102,66 @@ export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
                             ]}>
                                 {t[item.name]}
                             </Text>
-                            {item.screen === 'Pilotage' && (
+                            {(item.screen === 'Pilotage' || item.screen === 'Administration') && (
                                 <Ionicons 
-                                    name={reportingExpanded ? "chevron-down" : "chevron-forward"} 
+                                    name={
+                                        (item.screen === 'Pilotage' && reportingExpanded) ||
+                                        (item.screen === 'Administration' && administrationExpanded)
+                                            ? "chevron-down" 
+                                            : "chevron-forward"
+                                    } 
                                     size={18} 
                                     color={tTheme.sidebarText}
                                 />
                             )}
                         </TouchableOpacity>
+                        
+                        {/* Sous-menu Administration */}
+                        {item.screen === 'Administration' && administrationExpanded && (
+                            <View style={styles.submenu}>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.submenuItem,
+                                        activeScreen === 'AdministrationClients' && 
+                                        { backgroundColor: tTheme.sidebarActiveBackground }
+                                    ]}
+                                    onPress={() => handleNavigate('AdministrationClients')}
+                                >
+                                    <Ionicons 
+                                        name="people-outline" 
+                                        size={20} 
+                                        color={activeScreen === 'AdministrationClients' ? tTheme.sidebarActiveText : tTheme.sidebarText} 
+                                    />
+                                    <Text style={[
+                                        styles.submenuText,
+                                        { color: activeScreen === 'AdministrationClients' ? tTheme.sidebarActiveText : tTheme.sidebarText }
+                                    ]}>
+                                        Clients
+                                    </Text>
+                                </TouchableOpacity>
+                                
+                                <TouchableOpacity
+                                    style={[
+                                        styles.submenuItem,
+                                        activeScreen === 'AdministrationFournisseurs' && 
+                                        { backgroundColor: tTheme.sidebarActiveBackground }
+                                    ]}
+                                    onPress={() => handleNavigate('AdministrationFournisseurs')}
+                                >
+                                    <Ionicons 
+                                        name="business-outline" 
+                                        size={20} 
+                                        color={activeScreen === 'AdministrationFournisseurs' ? tTheme.sidebarActiveText : tTheme.sidebarText} 
+                                    />
+                                    <Text style={[
+                                        styles.submenuText,
+                                        { color: activeScreen === 'AdministrationFournisseurs' ? tTheme.sidebarActiveText : tTheme.sidebarText }
+                                    ]}>
+                                        Fournisseurs
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                         
                         {/* Sous-menu Reporting */}
                         {item.screen === 'Pilotage' && reportingExpanded && (

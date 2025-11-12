@@ -34,7 +34,10 @@ const MainContent = React.memo(({ screen }) => {
             case 'Paramétrage':
                 return CompanySettingsStack;
             case 'Administration':
-                return AdministrationStack;
+            case 'AdministrationClients':
+            case 'AdministrationFournisseurs':
+                // Utiliser une clé unique pour forcer le re-render
+                return () => <AdministrationStack key={screen} initialScreen={screen} />;
             case 'Achats':
                 return PurchasesStack;
             case 'Ventes':

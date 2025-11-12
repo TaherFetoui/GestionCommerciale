@@ -11,6 +11,7 @@ import {
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { downloadPurchaseOrderPDFWeb, printPurchaseOrderWeb } from '../../services/pdfGenerator';
 import { getGlobalStyles } from '../../styles/GlobalStyles';
 
 // Native-only imports for PDF generation (future enhancement)
@@ -43,8 +44,6 @@ export default function PurchaseOrdersListScreen() {
     const fetchOrders = useCallback(async () => {
         setLoading(true);
         
-        console.log('Fetching purchase orders for user:', user.id);
-        
         // Fetch company info
         const { data: companyData } = await supabase
             .from('company_info')
@@ -63,12 +62,9 @@ export default function PurchaseOrdersListScreen() {
             .eq('user_id', user.id)
             .order('created_at', { ascending: false });
             
-        console.log('Initial fetch result:', { dataCount: data?.length, error });
-            
         // If we have data, try to enrich with supplier info
         if (data && data.length > 0) {
             const supplierIds = [...new Set(data.map(o => o.supplier_id).filter(Boolean))];
-            console.log('Found supplier IDs:', supplierIds);
             
             if (supplierIds.length > 0) {
                 const { data: suppliersData, error: suppliersError } = await supabase
@@ -76,8 +72,6 @@ export default function PurchaseOrdersListScreen() {
                     .select('id, name')
                     .in('id', supplierIds);
                     
-                console.log('Suppliers fetch result:', { suppliersCount: suppliersData?.length, suppliersError });
-                
                 if (suppliersError) {
                     console.error('Error fetching suppliers:', suppliersError);
                 }
@@ -96,8 +90,6 @@ export default function PurchaseOrdersListScreen() {
             console.error('Error fetching purchase orders:', error);
             Alert.alert(t.error || 'Erreur', error.message || 'Impossible de charger les commandes');
         } else {
-            console.log('Purchase orders fetched:', data?.length || 0, 'orders');
-            console.log('Sample order:', data?.[0]);
             setOrders(data || []);
             setFilteredOrders(data || []);
         }
@@ -162,8 +154,12 @@ export default function PurchaseOrdersListScreen() {
             return;
         }
 
-        // TODO: Implement PDF generation for purchase orders
-        Alert.alert('Information', 'Fonctionnalité d\'impression en cours de développement');
+        try {
+            printPurchaseOrderWeb(order, order.suppliers, companyInfo);
+        } catch (error) {
+            console.error('Error printing purchase order:', error);
+            Alert.alert('Erreur', 'Impossible d\'imprimer la commande');
+        }
     }, [companyInfo]);
 
     // Handle download/share purchase order
@@ -178,13 +174,16 @@ export default function PurchaseOrdersListScreen() {
             return;
         }
 
-        // TODO: Implement PDF download for purchase orders
-        Alert.alert('Information', 'Fonctionnalité de téléchargement en cours de développement');
+        try {
+            downloadPurchaseOrderPDFWeb(order, order.suppliers, companyInfo);
+        } catch (error) {
+            console.error('Error downloading purchase order:', error);
+            Alert.alert('Erreur', 'Impossible de télécharger la commande');
+        }
     }, [companyInfo]);
 
     // Handle delete purchase order
     const handleDeleteOrder = useCallback((order) => {
-        console.log('Delete button clicked for order:', order.order_number);
         setOrderToDelete(order);
         setDeleteModalVisible(true);
     }, []);
@@ -193,7 +192,6 @@ export default function PurchaseOrdersListScreen() {
     const confirmDelete = useCallback(async () => {
         if (!orderToDelete) return;
         
-        console.log('Deleting purchase order:', orderToDelete.id);
         setDeleteModalVisible(false);
         
         try {
@@ -207,7 +205,6 @@ export default function PurchaseOrdersListScreen() {
                 console.error('Delete error:', error);
                 Alert.alert('Erreur', error.message);
             } else {
-                console.log('Purchase order deleted successfully');
                 setOrders(prev => prev.filter(order => order.id !== orderToDelete.id));
                 Alert.alert('✓ Succès', 'Commande supprimée avec succès');
             }
@@ -221,7 +218,6 @@ export default function PurchaseOrdersListScreen() {
 
     // Cancel delete
     const cancelDelete = useCallback(() => {
-        console.log('Delete cancelled');
         setDeleteModalVisible(false);
         setOrderToDelete(null);
     }, []);
@@ -257,11 +253,24 @@ export default function PurchaseOrdersListScreen() {
                 key: 'total_amount',
                 label: 'Montant',
                 flex: 1,
-                render: (row) => (
-                    <Text style={[localStyles.amount, { color: tTheme.text }]}>
-                        {row.total_amount?.toFixed(3) || '0.000'} TND
-                    </Text>
-                ),
+                render: (row) => {
+                    // Calculate total from items
+                    const items = row.items || [];
+                    
+                    const totalHT = items.reduce((sum, item) => {
+                        const quantity = parseFloat(item.quantity) || 0;
+                        const price = parseFloat(item.purchase_price || item.unit_price) || 0;
+                        return sum + (quantity * price);
+                    }, 0);
+                    const totalVAT = totalHT * 0.19; // 19% VAT
+                    const totalTTC = totalHT + totalVAT;
+                    
+                    return (
+                        <Text style={[localStyles.amount, { color: tTheme.text }]}>
+                            {totalTTC.toFixed(3)} TND
+                        </Text>
+                    );
+                },
             },
             {
                 key: 'status',
@@ -294,15 +303,6 @@ export default function PurchaseOrdersListScreen() {
                             <Ionicons name="print-outline" size={18} color={tTheme.primary} />
                         </TouchableOpacity>
                         <TouchableOpacity
-                            style={[localStyles.actionButton, { backgroundColor: '#10B981' + '15' }]}
-                            onPress={(e) => {
-                                e.stopPropagation();
-                                handleDownloadOrder(row);
-                            }}
-                        >
-                            <Ionicons name="download-outline" size={18} color="#10B981" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
                             activeOpacity={0.7}
                             style={[localStyles.deleteButton, { 
                                 backgroundColor: '#FEE2E2',
@@ -312,7 +312,6 @@ export default function PurchaseOrdersListScreen() {
                                 if (e && e.stopPropagation) {
                                     e.stopPropagation();
                                 }
-                                console.log('Delete button pressed!');
                                 handleDeleteOrder(row);
                             }}
                         >
@@ -322,7 +321,7 @@ export default function PurchaseOrdersListScreen() {
                 ),
             },
         ];
-    }, [tTheme, handlePrintOrder, handleDownloadOrder, handleDeleteOrder]);
+    }, [tTheme, handlePrintOrder, handleDeleteOrder]);
 
     const filterOptions = [
         { value: 'all', label: 'Tous' },

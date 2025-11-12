@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Picker } from '@react-native-picker/picker';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -22,6 +23,7 @@ export default function CreatePurchaseOrderScreen({ navigation }) {
     const [lineItems, setLineItems] = useState([{ item_id: null, item_name: '', quantity: '1', purchase_price: '0' }]);
     const [loading, setLoading] = useState(false);
     const [initialLoading, setInitialLoading] = useState(true);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     useEffect(() => {
         const fetchData = async () => {
@@ -52,14 +54,7 @@ export default function CreatePurchaseOrderScreen({ navigation }) {
                 console.error('Error fetching articles:', articlesError);
                 Alert.alert(t.error || 'Erreur', articlesError.message);
             } else {
-                console.log('✅ Articles loaded:', articlesData?.length || 0);
-                console.log('📦 Articles data:', articlesData);
                 setArticles(articlesData || []);
-                if (articlesData && articlesData.length > 0) {
-                    console.log('✅ First article:', articlesData[0]);
-                } else {
-                    console.warn('⚠️ No articles found for user:', user.id);
-                }
             }
             
             // Generate order number
@@ -151,31 +146,28 @@ export default function CreatePurchaseOrderScreen({ navigation }) {
     };
 
     const handleSave = async () => {
-        console.log('=== handleSave called ===');
-        console.log('selectedSupplierId:', selectedSupplierId);
-        console.log('orderNumber:', orderNumber);
-        console.log('lineItems:', lineItems);
-        
         // Validation
         if (!selectedSupplierId) {
-            console.log('Validation failed: no supplier');
             return Alert.alert('Champ requis', 'Veuillez sélectionner un fournisseur.');
         }
         if (!orderNumber.trim()) {
-            console.log('Validation failed: no order number');
             return Alert.alert('Champ requis', 'Veuillez entrer un numéro de commande.');
         }
         
         // Un article est valide seulement s'il a un item_id (sélectionné dans la liste)
-        const validItems = lineItems.filter(item => item.item_id);
-        console.log('validItems:', validItems);
+        const validItems = lineItems
+            .filter(item => item.item_id)
+            .map(item => ({
+                item_id: item.item_id,
+                item_name: item.item_name,
+                quantity: parseFloat(item.quantity) || 0,
+                purchase_price: parseFloat(item.purchase_price) || 0,
+            }));
         
         if (validItems.length === 0) {
-            console.log('Validation failed: no valid items');
             return Alert.alert('Articles requis', 'Veuillez sélectionner au moins un article à la commande.');
         }
         
-        console.log('All validations passed, creating order...');
         setLoading(true);
         
         try {
@@ -187,27 +179,36 @@ export default function CreatePurchaseOrderScreen({ navigation }) {
                 items: validItems,
             };
             
-            console.log('Inserting order data:', orderData);
-            
             const { error } = await supabase.from('purchase_orders').insert([orderData]);
 
             if (error) {
                 console.error('Error creating purchase order:', error);
-                Alert.alert(t.error || 'Erreur', error.message);
                 setLoading(false);
-            } else {
-                console.log('Order created successfully!');
-                // Redirection immédiate sans Alert pour éviter les problèmes
-                setLoading(false);
-                navigation.reset({
-                    index: 0,
-                    routes: [{ name: 'PurchaseOrdersList' }],
+                setToast({
+                    visible: true,
+                    message: 'Erreur lors de la création de la commande',
+                    type: 'error',
                 });
+            } else {
+                setLoading(false);
+                setToast({
+                    visible: true,
+                    message: 'Commande créée avec succès!',
+                    type: 'success',
+                });
+                // Navigate after a delay to show the toast
+                setTimeout(() => {
+                    navigation.navigate('PurchaseOrdersList');
+                }, 1500);
             }
         } catch (error) {
             console.error('Error:', error);
-            Alert.alert(t.error || 'Erreur', 'Une erreur est survenue lors de la création de la commande.');
             setLoading(false);
+            setToast({
+                visible: true,
+                message: 'Une erreur est survenue lors de la création de la commande',
+                type: 'error',
+            });
         }
     };
 
@@ -221,10 +222,18 @@ export default function CreatePurchaseOrderScreen({ navigation }) {
     }
 
     return (
-        <ScrollView 
-            style={[globalStyles.container, { backgroundColor: tTheme.background }]}
-            showsVerticalScrollIndicator={false}
-        >
+        <>
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
+            <ScrollView 
+                style={[globalStyles.container, { backgroundColor: tTheme.background }]}
+                showsVerticalScrollIndicator={false}
+            >
             <View style={localStyles.content}>
                 {/* Order Info Card */}
                 <View style={[localStyles.card, { backgroundColor: tTheme.card, ...tTheme.shadow.small }]}>
@@ -477,6 +486,7 @@ export default function CreatePurchaseOrderScreen({ navigation }) {
                 </View>
             </View>
         </ScrollView>
+        </>
     );
 }
 
