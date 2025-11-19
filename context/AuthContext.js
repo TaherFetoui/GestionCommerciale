@@ -12,20 +12,10 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   
   const [theme, setTheme] = useState('light');
-  const [language, setLanguage] = useState('en');
+  const language = 'fr'; // French only
 
   const toggleTheme = () => {
     setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
-  };
-
-  // This function now cycles through English, French, and Arabic
-  const languages = ['en', 'fr', 'ar'];
-  const toggleLanguage = () => {
-    setLanguage(currentLanguage => {
-      const currentIndex = languages.indexOf(currentLanguage);
-      const nextIndex = (currentIndex + 1) % languages.length;
-      return languages[nextIndex];
-    });
   };
 
   // Initialize session and set up auth listener
@@ -173,7 +163,6 @@ export const AuthProvider = ({ children }) => {
     theme,
     toggleTheme,
     language,
-    toggleLanguage,
   };
 
   return (

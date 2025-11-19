@@ -5,16 +5,10 @@ import { useAuth } from '../context/AuthContext';
 import { getGlobalStyles } from '../styles/GlobalStyles';
 
 export default function AppSettingsScreen() {
-    const { theme, toggleTheme, language, toggleLanguage } = useAuth();
+    const { theme, toggleTheme, language } = useAuth();
     const styles = getGlobalStyles(theme);
     const tTheme = themes[theme];
     const t = translations[language];
-
-    const currentLanguageName = {
-        fr: 'Français',
-        en: 'English',
-        ar: 'العربية',
-    };
 
     return (
         <View style={[styles.container, { backgroundColor: tTheme.background }]}>
@@ -26,15 +20,6 @@ export default function AppSettingsScreen() {
                     icon={theme === 'light' ? 'moon-outline' : 'sunny-outline'}
                     theme={theme}
                     onPress={toggleTheme}
-                />
-
-                {/* Language Setting Card */}
-                <ModernInfoCard
-                    title={t.switchLanguage}
-                    value={currentLanguageName[language]}
-                    icon="language-outline"
-                    theme={theme}
-                    onPress={toggleLanguage}
                 />
 
                 {/* App Information */}

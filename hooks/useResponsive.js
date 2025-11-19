@@ -54,9 +54,9 @@ export function useResponsive() {
     
     getSidebarWidth: () => {
       if (isMobile) return '100%'; // Full width on mobile
-      if (isTablet) return 240;
-      if (width < breakpoints.large) return 260;
-      return 280;
+      if (isTablet) return 200;
+      if (width < breakpoints.large) return 220;
+      return 240;
     },
     
     getContentPadding: () => {
