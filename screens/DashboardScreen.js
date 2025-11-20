@@ -3,6 +3,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Dimensions, Easing, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Svg, { Circle, Defs, Line, Path, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
 import { themes, translations } from '../constants/AppConfig';
 import { useAuth } from '../context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
@@ -590,111 +591,153 @@ const LineChart = React.memo(({ data, title, theme }) => {
         );
     }
     
-    const maxValue = Math.max(...data.map(d => d.value), 1);
-    const minValue = Math.min(...data.map(d => d.value), 0);
-    const chartHeight = 180;
-    const chartWidth = Dimensions.get('window').width - 80;
-    const pointRadius = 6;
+    const chartWidth = 700;
+    const chartHeight = 300;
+    const paddingTop = 20;
+    const paddingBottom = 40;
+    const paddingLeft = 50;
+    const paddingRight = 20;
     
-    const getYPosition = (value) => {
-        return chartHeight - ((value - minValue) / (maxValue - minValue)) * chartHeight;
+    const plotWidth = chartWidth - paddingLeft - paddingRight;
+    const plotHeight = chartHeight - paddingTop - paddingBottom;
+    
+    const maxValue = Math.max(...data.map(d => d.value), 1);
+    const minValue = 0; // Always start from 0 for revenue
+    
+    // Calculate points
+    const points = data.map((item, index) => {
+        const x = paddingLeft + (index / (data.length - 1)) * plotWidth;
+        const y = paddingTop + plotHeight - ((item.value - minValue) / (maxValue - minValue)) * plotHeight;
+        return { x, y, value: item.value, label: item.label };
+    });
+    
+    // Create smooth curve path using bezier curves
+    const createSmoothPath = () => {
+        if (points.length === 0) return '';
+        
+        let path = `M ${points[0].x} ${points[0].y}`;
+        
+        for (let i = 0; i < points.length - 1; i++) {
+            const current = points[i];
+            const next = points[i + 1];
+            const controlPointX = (current.x + next.x) / 2;
+            
+            path += ` C ${controlPointX} ${current.y}, ${controlPointX} ${next.y}, ${next.x} ${next.y}`;
+        }
+        
+        return path;
     };
+    
+    // Create area path (filled area under curve)
+    const createAreaPath = () => {
+        const curvePath = createSmoothPath();
+        const lastPoint = points[points.length - 1];
+        const firstPoint = points[0];
+        
+        return `${curvePath} L ${lastPoint.x} ${paddingTop + plotHeight} L ${firstPoint.x} ${paddingTop + plotHeight} Z`;
+    };
+    
+    // Format large numbers
+    const formatValue = (val) => {
+        if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
+        if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
+        return val.toFixed(0);
+    };
+    
+    // Calculate Y-axis labels
+    const yAxisSteps = 5;
+    const yAxisLabels = Array.from({ length: yAxisSteps }, (_, i) => {
+        const value = maxValue - (maxValue / (yAxisSteps - 1)) * i;
+        return { value, y: paddingTop + (plotHeight / (yAxisSteps - 1)) * i };
+    });
     
     return (
         <View style={[getGlobalStyles(theme).card, localStyles.chartContainer]}>
             <Text style={[localStyles.chartTitle, { color: tTheme.text }]}>{title}</Text>
             
-            <View style={[localStyles.lineChartContainer, { height: chartHeight + 60 }]}>
-                {/* Grid lines */}
-                <View style={localStyles.gridLines}>
-                    {[0, 0.25, 0.5, 0.75, 1].map((fraction, i) => (
-                        <View 
-                            key={i} 
-                            style={[
-                                localStyles.gridLine, 
-                                { 
-                                    top: chartHeight * fraction,
-                                    borderColor: tTheme.border + '40'
-                                }
-                            ]} 
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={localStyles.chartScroll}>
+                <Svg width={chartWidth} height={chartHeight}>
+                    <Defs>
+                        <SvgLinearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                            <Stop offset="0" stopColor={tTheme.primary} stopOpacity="0.3" />
+                            <Stop offset="1" stopColor={tTheme.primary} stopOpacity="0.05" />
+                        </SvgLinearGradient>
+                    </Defs>
+                    
+                    {/* Grid lines */}
+                    {yAxisLabels.map((label, i) => (
+                        <Line
+                            key={`grid-${i}`}
+                            x1={paddingLeft}
+                            y1={label.y}
+                            x2={chartWidth - paddingRight}
+                            y2={label.y}
+                            stroke={tTheme.border}
+                            strokeWidth="1"
+                            strokeOpacity="0.2"
                         />
                     ))}
-                </View>
-                
-                {/* Line path */}
-                <View style={localStyles.linePathContainer}>
-                    {data.map((point, index) => {
-                        if (index === 0) return null;
-                        
-                        const prevPoint = data[index - 1];
-                        const x1 = ((index - 1) / (data.length - 1)) * chartWidth;
-                        const y1 = getYPosition(prevPoint.value);
-                        const x2 = (index / (data.length - 1)) * chartWidth;
-                        const y2 = getYPosition(point.value);
-                        
-                        const length = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
-                        const angle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
-                        
-                        return (
-                            <View
-                                key={index}
-                                style={[
-                                    localStyles.lineSegment,
-                                    {
-                                        width: length,
-                                        left: x1,
-                                        top: y1,
-                                        transform: [{ rotate: `${angle}deg` }],
-                                        backgroundColor: tTheme.primary,
-                                    }
-                                ]}
-                            />
-                        );
-                    })}
+                    
+                    {/* Y-axis labels */}
+                    {yAxisLabels.map((label, i) => (
+                        <SvgText
+                            key={`ylabel-${i}`}
+                            x={paddingLeft - 10}
+                            y={label.y + 5}
+                            fill={tTheme.textSecondary}
+                            fontSize="12"
+                            textAnchor="end"
+                        >
+                            {formatValue(label.value)}
+                        </SvgText>
+                    ))}
+                    
+                    {/* Area under curve */}
+                    <Path
+                        d={createAreaPath()}
+                        fill="url(#areaGradient)"
+                    />
+                    
+                    {/* Line curve */}
+                    <Path
+                        d={createSmoothPath()}
+                        stroke={tTheme.primary}
+                        strokeWidth="3"
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    />
                     
                     {/* Data points */}
-                    {data.map((point, index) => {
-                        const x = (index / (data.length - 1)) * chartWidth;
-                        const y = getYPosition(point.value);
-                        
-                        return (
-                            <View
+                    {points.map((point, index) => (
+                        point.value > 0 && (
+                            <Circle
                                 key={`point-${index}`}
-                                style={[
-                                    localStyles.dataPoint,
-                                    {
-                                        left: x - pointRadius,
-                                        top: y - pointRadius,
-                                        backgroundColor: tTheme.primary,
-                                        borderColor: tTheme.card,
-                                    }
-                                ]}
-                            >
-                                <View style={[localStyles.pointInner, { backgroundColor: tTheme.card }]} />
-                            </View>
-                        );
-                    })}
-                </View>
-                
-                {/* Labels */}
-                <View style={localStyles.lineLabelsContainer}>
-                    {data.map((point, index) => (
-                        <Text 
-                            key={`label-${index}`}
-                            style={[
-                                localStyles.lineLabel, 
-                                { 
-                                    color: tTheme.textSecondary,
-                                    left: (index / (data.length - 1)) * chartWidth - 20
-                                }
-                            ]}
-                            numberOfLines={1}
+                                cx={point.x}
+                                cy={point.y}
+                                r="5"
+                                fill={tTheme.card}
+                                stroke={tTheme.primary}
+                                strokeWidth="2"
+                            />
+                        )
+                    ))}
+                    
+                    {/* X-axis labels */}
+                    {points.map((point, index) => (
+                        <SvgText
+                            key={`xlabel-${index}`}
+                            x={point.x}
+                            y={chartHeight - 15}
+                            fill={tTheme.textSecondary}
+                            fontSize="12"
+                            textAnchor="middle"
                         >
                             {point.label}
-                        </Text>
+                        </SvgText>
                     ))}
-                </View>
-            </View>
+                </Svg>
+            </ScrollView>
         </View>
     );
 });
@@ -823,26 +866,30 @@ export default function DashboardScreen() {
             
             // Fetch all data in parallel
             const [
-                salesData,
+                invoicesData,
                 purchasesData,
                 clientsData,
                 suppliersData,
                 itemsData
             ] = await Promise.all([
-                supabase.from('sales_orders').select('*, items, client_name, created_at, status').eq('user_id', user.id).order('created_at', { ascending: false }),
-                supabase.from('purchase_orders').select('*, items, supplier_id, created_at, status, order_number').eq('user_id', user.id).order('created_at', { ascending: false }),
+                supabase.from('invoices').select('*, items, client_id, invoice_number, created_at, status, total_amount').eq('user_id', user.id).order('created_at', { ascending: false }),
+                supabase.from('purchase_orders').select('*, items, supplier_id, created_at, status, order_number, total_amount').eq('user_id', user.id).order('created_at', { ascending: false }),
                 supabase.from('clients').select('id, name, created_at').eq('user_id', user.id).order('created_at', { ascending: false }),
                 supabase.from('suppliers').select('id, name, created_at').eq('user_id', user.id).order('created_at', { ascending: false }),
-                supabase.from('items').select('id, name, category, sale_price, purchase_price').eq('user_id', user.id)
+                supabase.from('items').select('id, name, family_id, sale_price, purchase_price').eq('user_id', user.id)
             ]);
 
             console.log('✅ Data fetched:', {
-                sales: salesData.data?.length,
+                invoices: invoicesData.data?.length,
                 purchases: purchasesData.data?.length,
                 clients: clientsData.data?.length,
                 suppliers: suppliersData.data?.length,
                 items: itemsData.data?.length
             });
+            
+            if (invoicesData.data && invoicesData.data.length > 0) {
+                console.log('📋 Sample invoice:', JSON.stringify(invoicesData.data[0], null, 2));
+            }
 
             // Calculate stats
             const now = new Date();
@@ -850,33 +897,39 @@ export default function DashboardScreen() {
             const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
             const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
             
-            // Monthly revenue (from sales)
-            const currentMonthSales = salesData.data?.filter(
-                sale => new Date(sale.created_at) >= startOfMonth
+            // Monthly revenue (from invoices)
+            const currentMonthInvoices = invoicesData.data?.filter(
+                invoice => new Date(invoice.created_at) >= startOfMonth
             ) || [];
             
-            const monthlyRevenueCalc = currentMonthSales.reduce((sum, sale) => {
-                // Calculate total from items if available
-                if (sale.items && Array.isArray(sale.items)) {
-                    const saleTotal = sale.items.reduce((itemSum, item) => {
-                        return itemSum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.sale_price) || 0));
+            const monthlyRevenueCalc = currentMonthInvoices.reduce((sum, invoice) => {
+                // Use total_amount if available, otherwise calculate from items
+                if (invoice.total_amount) {
+                    return sum + parseFloat(invoice.total_amount);
+                }
+                if (invoice.items && Array.isArray(invoice.items)) {
+                    const invoiceTotal = invoice.items.reduce((itemSum, item) => {
+                        return itemSum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0));
                     }, 0);
-                    return sum + saleTotal;
+                    return sum + invoiceTotal;
                 }
                 return sum;
             }, 0);
 
             // Last month revenue for trend calculation
-            const lastMonthSales = salesData.data?.filter(
-                sale => new Date(sale.created_at) >= startOfLastMonth && new Date(sale.created_at) <= endOfLastMonth
+            const lastMonthInvoices = invoicesData.data?.filter(
+                invoice => new Date(invoice.created_at) >= startOfLastMonth && new Date(invoice.created_at) <= endOfLastMonth
             ) || [];
             
-            const lastMonthRevenue = lastMonthSales.reduce((sum, sale) => {
-                if (sale.items && Array.isArray(sale.items)) {
-                    const saleTotal = sale.items.reduce((itemSum, item) => {
-                        return itemSum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.sale_price) || 0));
+            const lastMonthRevenue = lastMonthInvoices.reduce((sum, invoice) => {
+                if (invoice.total_amount) {
+                    return sum + parseFloat(invoice.total_amount);
+                }
+                if (invoice.items && Array.isArray(invoice.items)) {
+                    const invoiceTotal = invoice.items.reduce((itemSum, item) => {
+                        return itemSum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0));
                     }, 0);
-                    return sum + saleTotal;
+                    return sum + invoiceTotal;
                 }
                 return sum;
             }, 0);
@@ -913,13 +966,13 @@ export default function DashboardScreen() {
                 ? ((newClientsThisMonth - newClientsLastMonth) / newClientsLastMonth * 100).toFixed(1)
                 : newClientsThisMonth > 0 ? 100 : 0;
 
-            // Unpaid/pending invoices (sales with pending/confirmed status)
-            const unpaidInvoices = salesData.data?.filter(
-                invoice => invoice.status === 'pending' || invoice.status === 'confirmed'
+            // Unpaid/pending invoices
+            const unpaidInvoices = invoicesData.data?.filter(
+                invoice => invoice.status === 'awaiting_payment' || invoice.status === 'overdue'
             ).length || 0;
             
-            const lastMonthUnpaid = salesData.data?.filter(
-                invoice => (invoice.status === 'pending' || invoice.status === 'confirmed') &&
+            const lastMonthUnpaid = invoicesData.data?.filter(
+                invoice => (invoice.status === 'awaiting_payment' || invoice.status === 'overdue') &&
                            new Date(invoice.created_at) <= endOfLastMonth
             ).length || 0;
             
@@ -940,55 +993,66 @@ export default function DashboardScreen() {
                 }
             });
 
-            // Generate monthly revenue chart data (last 6 months)
+            // Generate monthly revenue chart data (5 months: current month in center, 2 before, 2 after)
             const monthlyData = [];
-            const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+            const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
             
-            for (let i = 5; i >= 0; i--) {
-                const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-                const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+            // Get 5 months: 2 before current, current, 2 after current
+            for (let offset = -2; offset <= 2; offset++) {
+                const targetDate = new Date(currentYear, currentMonth + offset, 1);
+                const month = targetDate.getMonth();
+                const year = targetDate.getFullYear();
                 
-                const monthSales = salesData.data?.filter(sale => {
-                    const saleDate = new Date(sale.created_at);
-                    return saleDate >= monthDate && saleDate <= monthEnd;
+                const monthStart = new Date(year, month, 1, 0, 0, 0);
+                const monthEnd = new Date(year, month + 1, 0, 23, 59, 59);
+                
+                const monthInvoices = invoicesData.data?.filter(invoice => {
+                    const invoiceDate = new Date(invoice.issue_date || invoice.created_at);
+                    return invoiceDate >= monthStart && invoiceDate <= monthEnd;
                 }) || [];
                 
-                const monthRevenue = monthSales.reduce((sum, sale) => {
-                    if (sale.items && Array.isArray(sale.items)) {
-                        const saleTotal = sale.items.reduce((itemSum, item) => {
-                            return itemSum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.sale_price) || 0));
+                const monthRevenue = monthInvoices.reduce((sum, invoice) => {
+                    if (invoice.total_amount) {
+                        return sum + parseFloat(invoice.total_amount);
+                    }
+                    if (invoice.items && Array.isArray(invoice.items)) {
+                        const invoiceTotal = invoice.items.reduce((itemSum, item) => {
+                            return itemSum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0));
                         }, 0);
-                        return sum + saleTotal;
+                        return sum + invoiceTotal;
                     }
                     return sum;
                 }, 0);
                 
                 monthlyData.push({
-                    label: monthNames[monthDate.getMonth()],
+                    label: monthNames[month] + ' ' + year,
                     value: monthRevenue,
                     color: '#3B82F6'
                 });
             }
             
+            console.log('📊 Monthly Revenue Data:', monthlyData);
+            console.log('📊 Monthly Revenue Length:', monthlyData.length);
+            console.log('📊 Monthly Revenue Sample:', monthlyData[0]);
             setMonthlyRevenue(monthlyData);
 
-            // Calculate top products from sales
+            // Calculate top products from invoices
             const itemSales = {};
-            salesData.data?.forEach(sale => {
-                if (sale.items && Array.isArray(sale.items)) {
-                    sale.items.forEach(item => {
-                        const itemId = item.item_id || item.item_name;
-                        if (itemId) {
-                            if (!itemSales[itemId]) {
-                                itemSales[itemId] = {
-                                    name: item.item_name || itemId,
-                                    quantity: 0,
-                                    revenue: 0
-                                };
-                            }
-                            itemSales[itemId].quantity += parseFloat(item.quantity) || 0;
-                            itemSales[itemId].revenue += (parseFloat(item.quantity) || 0) * (parseFloat(item.sale_price) || 0);
+            invoicesData.data?.forEach(invoice => {
+                if (invoice.items && Array.isArray(invoice.items)) {
+                    invoice.items.forEach(item => {
+                        const itemName = item.description || item.item_name || 'Produit';
+                        if (!itemSales[itemName]) {
+                            itemSales[itemName] = {
+                                name: itemName,
+                                quantity: 0,
+                                revenue: 0
+                            };
                         }
+                        itemSales[itemName].quantity += parseFloat(item.quantity) || 0;
+                        itemSales[itemName].revenue += (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
                     });
                 }
             });
@@ -1008,21 +1072,21 @@ export default function DashboardScreen() {
             ]);
             
             // Generate category distribution from items
-            const categoryStats = {};
-            let totalCategoryValue = 0;
+            const familyStats = {};
+            let totalFamilyValue = 0;
             
             itemsData.data?.forEach(item => {
-                const category = item.category || 'Non catégorisé';
-                if (!categoryStats[category]) {
-                    categoryStats[category] = 0;
+                const family = item.family_id || 'Non catégorisé';
+                if (!familyStats[family]) {
+                    familyStats[family] = 0;
                 }
                 // Count items or use a value metric
-                categoryStats[category] += 1;
-                totalCategoryValue += 1;
+                familyStats[family] += 1;
+                totalFamilyValue += 1;
             });
             
             const colors = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4', '#F43F5E'];
-            const categoryArray = Object.entries(categoryStats)
+            const familyArray = Object.entries(familyStats)
                 .map(([label, value], index) => ({
                     label,
                     value,
@@ -1030,27 +1094,32 @@ export default function DashboardScreen() {
                 }))
                 .sort((a, b) => b.value - a.value);
             
-            setCategoryDistribution(categoryArray.length > 0 ? categoryArray : [
+            setCategoryDistribution(familyArray.length > 0 ? familyArray : [
                 { label: 'Aucune catégorie', value: 1, color: '#9CA3AF' }
             ]);
 
             // Generate recent activities with real data
             const activities = [];
             
-            // Add recent sales
-            const recentSales = salesData.data?.slice(0, 3).map(sale => {
-                const saleTotal = sale.items && Array.isArray(sale.items)
-                    ? sale.items.reduce((sum, item) => {
-                        return sum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.sale_price) || 0));
-                    }, 0)
-                    : 0;
+            // Add recent invoices
+            const recentInvoices = invoicesData.data?.slice(0, 3).map(invoice => {
+                const invoiceTotal = invoice.total_amount 
+                    ? parseFloat(invoice.total_amount)
+                    : invoice.items && Array.isArray(invoice.items)
+                        ? invoice.items.reduce((sum, item) => {
+                            return sum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0));
+                        }, 0)
+                        : 0;
+                
+                // Get client name from client_id if available
+                const clientName = clientsData.data?.find(c => c.id === invoice.client_id)?.name || 'Client';
                 
                 return {
                     icon: 'cart-outline',
                     color: '#10B981',
-                    title: `Vente - ${sale.client_name || 'Client'}`,
-                    time: formatTimeAgo(sale.created_at),
-                    amount: saleTotal.toFixed(3),
+                    title: `Facture - ${clientName}`,
+                    time: formatTimeAgo(invoice.created_at),
+                    amount: invoiceTotal.toFixed(3),
                     type: 'income'
                 };
             }) || [];
@@ -1083,7 +1152,7 @@ export default function DashboardScreen() {
             })) || [];
 
             // Combine and sort all activities
-            activities.push(...recentSales, ...recentPurchases, ...recentNewClients);
+            activities.push(...recentInvoices, ...recentPurchases, ...recentNewClients);
             activities.sort((a, b) => {
                 // Sort by time (most recent first)
                 const timeA = a.time.includes('instant') ? 0 : 
@@ -1128,6 +1197,18 @@ export default function DashboardScreen() {
         useCallback(() => {
             setLoading(true);
             fetchDashboardData();
+            
+            // Set up auto-refresh every 30 seconds when screen is focused
+            const refreshInterval = setInterval(() => {
+                console.log('🔄 Auto-refreshing dashboard data...');
+                fetchDashboardData();
+            }, 30000); // 30 seconds
+            
+            // Cleanup interval when screen loses focus
+            return () => {
+                console.log('🛑 Stopping auto-refresh');
+                clearInterval(refreshInterval);
+            };
         }, [fetchDashboardData])
     );
 
@@ -1163,6 +1244,10 @@ export default function DashboardScreen() {
         inputRange: [0, 1],
         outputRange: [0.3, 0.7],
     });
+    
+    console.log('🎨 Rendering Dashboard with monthlyRevenue:', monthlyRevenue);
+    console.log('🎨 monthlyRevenue is array?', Array.isArray(monthlyRevenue));
+    console.log('🎨 monthlyRevenue length:', monthlyRevenue?.length);
 
     return (
         <View style={{ flex: 1 }}>
@@ -1213,7 +1298,7 @@ export default function DashboardScreen() {
                 <View style={[localStyles.chartWrapper, isMobile && localStyles.chartWrapperFull]}>
                     <LineChart 
                         data={monthlyRevenue}
-                        title="Évolution du chiffre d'affaires"
+                        title="Évolution du CA mensuel"
                         theme={theme}
                     />
                 </View>

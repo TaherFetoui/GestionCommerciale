@@ -1,9 +1,19 @@
-import React, { useState } from 'react';
-import { View, TextInput, StyleSheet, Alert, ScrollView, Text, TouchableOpacity } from 'react-native';
-import { supabase } from '../../lib/supabase';
+import { useState } from 'react';
+import { ScrollView } from 'react-native';
+import {
+    FormActions,
+    FormCard,
+    FormColumn,
+    FormInput,
+    FormRow,
+    FormSecondaryButton,
+    FormSubmitButton,
+    ModernFormModal
+} from '../../components/ModernForm';
+import Toast from '../../components/Toast';
+import { translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
-import { themes, translations } from '../../constants/AppConfig';
-import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../../lib/supabase';
 
 export default function CreateSupplierScreen({ navigation }) {
     const [name, setName] = useState('');
@@ -12,13 +22,17 @@ export default function CreateSupplierScreen({ navigation }) {
     const [address, setAddress] = useState('');
     const [taxId, setTaxId] = useState('');
     const [loading, setLoading] = useState(false);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
     const { user, theme, language } = useAuth();
-    const tTheme = themes[theme];
     const t = translations[language];
 
     const handleSave = async () => {
         if (!name) {
-            Alert.alert(t.error, t.requiredField);
+            setToast({
+                visible: true,
+                message: t.requiredField,
+                type: 'error',
+            });
             return;
         }
         setLoading(true);
@@ -27,43 +41,114 @@ export default function CreateSupplierScreen({ navigation }) {
             .insert([{ user_id: user.id, name, email, phone, address, tax_id: taxId }]);
 
         if (error) {
-            Alert.alert(t.error, error.message);
+            setToast({
+                visible: true,
+                message: error.message,
+                type: 'error',
+            });
         } else {
-            Alert.alert(t.success, 'Fournisseur ajouté avec succès!');
-            navigation.goBack();
+            setToast({
+                visible: true,
+                message: 'Fournisseur ajouté avec succès!',
+                type: 'success',
+            });
+            setTimeout(() => navigation.goBack(), 1500);
         }
         setLoading(false);
     };
 
     return (
-        <ScrollView style={[styles.container, { backgroundColor: tTheme.background }]}>
-            <Text style={[styles.label, { color: tTheme.text }]}>{t.supplierName} *</Text>
-            <TextInput style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text }]} value={name} onChangeText={setName} placeholder="Nom de l'entreprise" />
-            
-            <Text style={[styles.label, { color: tTheme.text }]}>{t.matriculeFiscale}</Text>
-            <TextInput style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text }]} value={taxId} onChangeText={setTaxId} />
+        <>
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
+            <ModernFormModal
+                visible={true}
+                onClose={() => navigation.goBack()}
+                title="Créer un Fournisseur"
+                theme={theme}
+            >
+                <ScrollView showsVerticalScrollIndicator={false}>
+                    <FormCard title="Informations générales" icon="business" theme={theme}>
+                        <FormInput
+                            label={t.supplierName}
+                            value={name}
+                            onChangeText={setName}
+                            placeholder="Nom de l'entreprise"
+                            icon="business"
+                            required
+                            theme={theme}
+                        />
 
-            <Text style={[styles.label, { color: tTheme.text }]}>Email</Text>
-            <TextInput style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text }]} value={email} onChangeText={setEmail} keyboardType="email-address" />
-            
-            <Text style={[styles.label, { color: tTheme.text }]}>Téléphone</Text>
-            <TextInput style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text }]} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+                        <FormInput
+                            label={t.matriculeFiscale}
+                            value={taxId}
+                            onChangeText={setTaxId}
+                            placeholder="Matricule fiscale"
+                            icon="card"
+                            theme={theme}
+                        />
+                    </FormCard>
 
-            <Text style={[styles.label, { color: tTheme.text }]}>{t.address}</Text>
-            <TextInput style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text, height: 80 }]} value={address} onChangeText={setAddress} multiline />
+                    <FormCard title="Coordonnées" icon="call" theme={theme}>
+                        <FormRow>
+                            <FormColumn>
+                                <FormInput
+                                    label="Email"
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    placeholder="email@exemple.com"
+                                    icon="mail"
+                                    keyboardType="email-address"
+                                    theme={theme}
+                                />
+                            </FormColumn>
+                            <FormColumn>
+                                <FormInput
+                                    label="Téléphone"
+                                    value={phone}
+                                    onChangeText={setPhone}
+                                    placeholder="+216 XX XXX XXX"
+                                    icon="call"
+                                    keyboardType="phone-pad"
+                                    theme={theme}
+                                />
+                            </FormColumn>
+                        </FormRow>
 
-            <TouchableOpacity style={[styles.saveButton, { backgroundColor: tTheme.accent }]} onPress={handleSave} disabled={loading}>
-                <Ionicons name="save-outline" size={22} color="#fff" />
-                <Text style={styles.saveButtonText}>{loading ? t.saving : t.save}</Text>
-            </TouchableOpacity>
-        </ScrollView>
+                        <FormInput
+                            label={t.address}
+                            value={address}
+                            onChangeText={setAddress}
+                            placeholder="Adresse complète"
+                            icon="location"
+                            multiline
+                            theme={theme}
+                        />
+                    </FormCard>
+
+                    <FormActions>
+                        <FormSecondaryButton
+                            onPress={() => navigation.goBack()}
+                            disabled={loading}
+                            theme={theme}
+                        >
+                            Annuler
+                        </FormSecondaryButton>
+                        <FormSubmitButton
+                            onPress={handleSave}
+                            loading={loading}
+                            theme={theme}
+                        >
+                            {loading ? t.saving : t.save}
+                        </FormSubmitButton>
+                    </FormActions>
+                </ScrollView>
+            </ModernFormModal>
+        </>
     );
 }
-
-const styles = StyleSheet.create({
-    container: { flex: 1, padding: 20 },
-    label: { fontSize: 16, marginBottom: 8, fontWeight: 'bold' },
-    input: { borderWidth: 1, borderColor: '#ccc', padding: 12, marginBottom: 18, borderRadius: 8, fontSize: 16 },
-    saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 15, borderRadius: 30, elevation: 3, marginTop: 10, marginBottom: 40 },
-    saveButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginLeft: 10 },
-});

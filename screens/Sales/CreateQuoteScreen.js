@@ -1,16 +1,27 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, TextInput, StyleSheet, Alert, ScrollView, Text, TouchableOpacity, Platform } from 'react-native';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../context/AuthContext';
-import { Picker } from '@react-native-picker/picker';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Ionicons } from '@expo/vector-icons';
+import { useEffect, useMemo, useState } from 'react';
+import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+    FormActions,
+    FormCard,
+    FormInput,
+    FormPicker,
+    FormSecondaryButton,
+    FormSubmitButton,
+    ModernFormModal
+} from '../../components/ModernForm';
+import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
+import { getGlobalStyles } from '../../styles/GlobalStyles';
 
 export default function CreateQuoteScreen({ navigation }) {
     const { user, theme, language } = useAuth();
     const tTheme = themes[theme];
     const t = translations[language];
+    const globalStyles = getGlobalStyles(theme);
 
     const [clients, setClients] = useState([]);
     const [selectedClientId, setSelectedClientId] = useState('');
@@ -21,15 +32,19 @@ export default function CreateQuoteScreen({ navigation }) {
     const [loading, setLoading] = useState(false);
     const [showIssueDatePicker, setShowIssueDatePicker] = useState(false);
     const [showExpiryDatePicker, setShowExpiryDatePicker] = useState(false);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     useEffect(() => {
         const fetchClients = async () => {
-            const { data, error } = await supabase.from('clients').select('id, name');
-            if (error) Alert.alert(t.error, error.message);
-            else setClients(data);
+            const { data, error } = await supabase.from('clients').select('id, name').eq('user_id', user.id);
+            if (error) {
+                setToast({ visible: true, message: error.message, type: 'error' });
+            } else {
+                setClients(data);
+            }
         };
         fetchClients();
-    }, [t.error]);
+    }, [user.id]);
 
     const totalAmount = useMemo(() => {
         return items.reduce((sum, item) => {
@@ -50,12 +65,18 @@ export default function CreateQuoteScreen({ navigation }) {
     };
 
     const handleRemoveItem = (index) => {
-        setItems(items.filter((_, i) => i !== index));
+        if (items.length > 1) {
+            setItems(items.filter((_, i) => i !== index));
+        }
     };
 
     const handleSaveQuote = async () => {
         if (!selectedClientId || !quoteNumber) {
-            Alert.alert(t.error, 'Client et numéro de devis sont requis.');
+            setToast({
+                visible: true,
+                message: 'Client et numéro de devis sont requis.',
+                type: 'error',
+            });
             return;
         }
         setLoading(true);
@@ -71,72 +92,323 @@ export default function CreateQuoteScreen({ navigation }) {
         }]);
 
         if (error) {
-            Alert.alert(t.error, error.message);
+            setToast({
+                visible: true,
+                message: error.message,
+                type: 'error',
+            });
         } else {
-            Alert.alert(t.success, 'Devis créé avec succès!');
-            navigation.goBack();
+            setToast({
+                visible: true,
+                message: 'Devis créé avec succès!',
+                type: 'success',
+            });
+            setTimeout(() => navigation.goBack(), 1500);
         }
         setLoading(false);
     };
 
+    const handleDateChange = (type, event, selectedDate) => {
+        if (type === 'issue') {
+            setShowIssueDatePicker(Platform.OS === 'ios');
+            if (selectedDate) setIssueDate(selectedDate);
+        } else {
+            setShowExpiryDatePicker(Platform.OS === 'ios');
+            if (selectedDate) setExpiryDate(selectedDate);
+        }
+    };
+
     return (
-        <ScrollView style={[styles.container, { backgroundColor: tTheme.background }]}>
-            <Text style={[styles.label, { color: tTheme.text }]}>Numéro de Devis *</Text>
-            <TextInput style={[styles.input, {backgroundColor: tTheme.card, color: tTheme.text}]} value={quoteNumber} onChangeText={setQuoteNumber} />
+        <>
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
+            <ModernFormModal
+                visible={true}
+                onClose={() => navigation.goBack()}
+                title="Créer un Devis"
+                theme={theme}
+            >
+                <ScrollView showsVerticalScrollIndicator={false}>
+                    <FormCard title="Informations du devis" icon="document-text" theme={theme}>
+                        <FormInput
+                            label="Numéro de Devis"
+                            value={quoteNumber}
+                            onChangeText={setQuoteNumber}
+                            placeholder="DEV-001"
+                            icon="barcode"
+                            required
+                            theme={theme}
+                        />
 
-            <Text style={[styles.label, { color: tTheme.text }]}>Client *</Text>
-            <View style={[styles.pickerContainer, {backgroundColor: tTheme.card}]}>
-                <Picker selectedValue={selectedClientId} onValueChange={(itemValue) => setSelectedClientId(itemValue)} style={{color: tTheme.text}}>
-                    <Picker.Item label="-- Sélectionner un client --" value="" />
-                    {clients.map(client => <Picker.Item key={client.id} label={client.name} value={client.id} />)}
-                </Picker>
-            </View>
+                        <FormPicker
+                            label="Client"
+                            selectedValue={selectedClientId}
+                            onValueChange={setSelectedClientId}
+                            items={clients.map(c => ({ label: c.name, value: c.id }))}
+                            placeholder="-- Sélectionner un client --"
+                            icon="person"
+                            required
+                            theme={theme}
+                        />
 
-            {/* Date Pickers */}
-            
-            <Text style={styles.sectionTitle}>Articles</Text>
-            {items.map((item, index) => (
-                <View key={index} style={styles.itemContainer}>
-                    <TextInput style={styles.itemInput} placeholder="Description" value={item.description} onChangeText={(val) => handleItemChange(index, 'description', val)} />
-                    <View style={styles.itemRow}>
-                        <TextInput style={styles.itemInputSmall} placeholder="Qté" value={item.quantity} onChangeText={(val) => handleItemChange(index, 'quantity', val)} keyboardType="numeric" />
-                        <TextInput style={styles.itemInputSmall} placeholder="P.U." value={item.unitPrice} onChangeText={(val) => handleItemChange(index, 'unitPrice', val)} keyboardType="numeric" />
-                        <TouchableOpacity onPress={() => handleRemoveItem(index)}>
-                            <Ionicons name="trash-outline" size={24} color="red" />
-                        </TouchableOpacity>
+                        {/* Date Pickers */}
+                        <View style={localStyles.inputContainer}>
+                            <Text style={[globalStyles.label, { color: tTheme.text }]}>
+                                Date d'émission <Text style={{ color: '#EF4444' }}>*</Text>
+                            </Text>
+                            <TouchableOpacity
+                                onPress={() => setShowIssueDatePicker(true)}
+                                style={[localStyles.dateButton, { 
+                                    backgroundColor: tTheme.card, 
+                                    borderColor: tTheme.border 
+                                }]}
+                            >
+                                <Ionicons name="calendar" size={20} color={tTheme.primary} style={{ marginRight: 12 }} />
+                                <Text style={[localStyles.dateText, { color: tTheme.text }]}>
+                                    {issueDate.toLocaleDateString('fr-FR')}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {showIssueDatePicker && (
+                            <DateTimePicker
+                                value={issueDate}
+                                mode="date"
+                                display="default"
+                                onChange={(event, date) => handleDateChange('issue', event, date)}
+                            />
+                        )}
+
+                        <View style={localStyles.inputContainer}>
+                            <Text style={[globalStyles.label, { color: tTheme.text }]}>
+                                Date d'expiration <Text style={{ color: '#EF4444' }}>*</Text>
+                            </Text>
+                            <TouchableOpacity
+                                onPress={() => setShowExpiryDatePicker(true)}
+                                style={[localStyles.dateButton, { 
+                                    backgroundColor: tTheme.card, 
+                                    borderColor: tTheme.border 
+                                }]}
+                            >
+                                <Ionicons name="calendar" size={20} color={tTheme.primary} style={{ marginRight: 12 }} />
+                                <Text style={[localStyles.dateText, { color: tTheme.text }]}>
+                                    {expiryDate.toLocaleDateString('fr-FR')}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {showExpiryDatePicker && (
+                            <DateTimePicker
+                                value={expiryDate}
+                                mode="date"
+                                display="default"
+                                onChange={(event, date) => handleDateChange('expiry', event, date)}
+                            />
+                        )}
+                    </FormCard>
+
+                    <FormCard 
+                        title="Articles" 
+                        icon="list" 
+                        theme={theme}
+                        rightButton={
+                            <TouchableOpacity
+                                onPress={handleAddItem}
+                                style={[localStyles.addButton, { backgroundColor: tTheme.success }]}
+                            >
+                                <Ionicons name="add" size={24} color="#FFFFFF" />
+                            </TouchableOpacity>
+                        }
+                    >
+                        {items.map((item, index) => (
+                            <View 
+                                key={index}
+                                style={[localStyles.itemCard, { 
+                                    backgroundColor: tTheme.background,
+                                    borderColor: tTheme.border
+                                }]}
+                            >
+                                <View style={localStyles.itemHeader}>
+                                    <Text style={[localStyles.itemNumber, { color: tTheme.textSecondary }]}>
+                                        Article #{index + 1}
+                                    </Text>
+                                    {items.length > 1 && (
+                                        <TouchableOpacity
+                                            onPress={() => handleRemoveItem(index)}
+                                            style={localStyles.removeButton}
+                                        >
+                                            <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+
+                                <FormInput
+                                    label="Description"
+                                    value={item.description}
+                                    onChangeText={(val) => handleItemChange(index, 'description', val)}
+                                    placeholder="Description de l'article"
+                                    icon="document-text"
+                                    multiline
+                                    theme={theme}
+                                />
+
+                                <View style={localStyles.itemRow}>
+                                    <View style={{ flex: 1, marginRight: 8 }}>
+                                        <FormInput
+                                            label="Quantité"
+                                            value={item.quantity}
+                                            onChangeText={(val) => handleItemChange(index, 'quantity', val)}
+                                            placeholder="1"
+                                            icon="cube"
+                                            keyboardType="numeric"
+                                            theme={theme}
+                                        />
+                                    </View>
+                                    <View style={{ flex: 1, marginLeft: 8 }}>
+                                        <FormInput
+                                            label="Prix unitaire"
+                                            value={item.unitPrice}
+                                            onChangeText={(val) => handleItemChange(index, 'unitPrice', val)}
+                                            placeholder="0.000"
+                                            icon="pricetag"
+                                            keyboardType="numeric"
+                                            theme={theme}
+                                        />
+                                    </View>
+                                </View>
+
+                                <View style={[localStyles.subtotal, { backgroundColor: tTheme.primarySoft }]}>
+                                    <Text style={[localStyles.subtotalText, { color: tTheme.primary }]}>
+                                        Sous-total: {((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)).toFixed(3)} TND
+                                    </Text>
+                                </View>
+                            </View>
+                        ))}
+                    </FormCard>
+
+                    {/* Total Summary */}
+                    <View style={[localStyles.summaryCard, { 
+                        backgroundColor: tTheme.card,
+                        borderColor: tTheme.border
+                    }]}>
+                        <View style={localStyles.summaryRow}>
+                            <Text style={[localStyles.summaryLabel, { color: tTheme.text }]}>
+                                Total
+                            </Text>
+                            <Text style={[localStyles.summaryValue, { color: tTheme.primary }]}>
+                                {totalAmount.toFixed(3)} TND
+                            </Text>
+                        </View>
                     </View>
-                </View>
-            ))}
-            <TouchableOpacity style={styles.addButton} onPress={handleAddItem}>
-                <Ionicons name="add-circle-outline" size={22} color="#fff" />
-                <Text style={styles.addButtonText}>Ajouter un article</Text>
-            </TouchableOpacity>
 
-            <View style={styles.summaryContainer}>
-                <Text style={styles.totalText}>Total: {totalAmount.toFixed(2)} TND</Text>
-            </View>
-
-            <TouchableOpacity style={styles.saveButton} onPress={handleSaveQuote} disabled={loading}>
-                <Text style={styles.saveButtonText}>{loading ? t.saving : t.save}</Text>
-            </TouchableOpacity>
-        </ScrollView>
+                    <FormActions>
+                        <FormSecondaryButton
+                            onPress={() => navigation.goBack()}
+                            disabled={loading}
+                            theme={theme}
+                        >
+                            Annuler
+                        </FormSecondaryButton>
+                        <FormSubmitButton
+                            onPress={handleSaveQuote}
+                            loading={loading}
+                            theme={theme}
+                        >
+                            {loading ? t.saving : 'Créer le devis'}
+                        </FormSubmitButton>
+                    </FormActions>
+                </ScrollView>
+            </ModernFormModal>
+        </>
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, padding: 15 },
-    label: { fontSize: 16, marginBottom: 5, color: '#333' },
-    input: { borderWidth: 1, borderColor: '#ccc', padding: 10, marginBottom: 15, borderRadius: 5 },
-    pickerContainer: { borderWidth: 1, borderColor: '#ccc', borderRadius: 5, marginBottom: 15 },
-    sectionTitle: { fontSize: 18, fontWeight: 'bold', marginTop: 20, marginBottom: 10 },
-    itemContainer: { padding: 10, borderWidth: 1, borderColor: '#eee', borderRadius: 5, marginBottom: 10 },
-    itemRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 5 },
-    itemInput: { borderWidth: 1, borderColor: '#ccc', padding: 8, borderRadius: 5 },
-    itemInputSmall: { borderWidth: 1, borderColor: '#ccc', padding: 8, borderRadius: 5, width: '40%' },
-    addButton: { flexDirection: 'row', backgroundColor: '#28a745', padding: 10, borderRadius: 5, justifyContent: 'center', alignItems: 'center', marginTop: 10 },
-    addButtonText: { color: '#fff', marginLeft: 5, fontWeight: 'bold' },
-    summaryContainer: { marginTop: 20, alignItems: 'flex-end' },
-    totalText: { fontSize: 18, fontWeight: 'bold' },
-    saveButton: { backgroundColor: '#007bff', padding: 15, borderRadius: 5, alignItems: 'center', marginTop: 30, marginBottom: 50 },
-    saveButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
+const localStyles = StyleSheet.create({
+    inputContainer: {
+        marginBottom: 20,
+    },
+    dateButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        minHeight: 48,
+    },
+    dateText: {
+        fontSize: 16,
+        flex: 1,
+    },
+    addButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+    },
+    itemCard: {
+        borderWidth: 1,
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 16,
+    },
+    itemHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    itemNumber: {
+        fontSize: 13,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    removeButton: {
+        padding: 4,
+    },
+    itemRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+    },
+    subtotal: {
+        marginTop: 12,
+        padding: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    subtotalText: {
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    summaryCard: {
+        borderWidth: 1,
+        borderRadius: 12,
+        padding: 20,
+        marginBottom: 24,
+    },
+    summaryRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    summaryLabel: {
+        fontSize: 18,
+        fontWeight: '700',
+    },
+    summaryValue: {
+        fontSize: 22,
+        fontWeight: '700',
+    },
 });

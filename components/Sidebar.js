@@ -25,6 +25,7 @@ export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
     const [profileName, setProfileName] = useState('');
     const [reportingExpanded, setReportingExpanded] = useState(false);
     const [administrationExpanded, setAdministrationExpanded] = useState(false);
+    const [salesExpanded, setSalesExpanded] = useState(false);
 
     useEffect(() => {
         const fetchProfile = async () => {
@@ -52,6 +53,12 @@ export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
         if (screen === 'Administration' && !subScreen) {
             // Toggle administration submenu
             setAdministrationExpanded(!administrationExpanded);
+            return;
+        }
+        
+        if (screen === 'Ventes' && !subScreen) {
+            // Toggle sales submenu
+            setSalesExpanded(!salesExpanded);
             return;
         }
         
@@ -86,7 +93,8 @@ export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
                                 styles.navItem,
                                 (activeScreen === item.screen || 
                                  (item.screen === 'Pilotage' && reportingExpanded) ||
-                                 (item.screen === 'Administration' && administrationExpanded)) && 
+                                 (item.screen === 'Administration' && administrationExpanded) ||
+                                 (item.screen === 'Ventes' && salesExpanded)) && 
                                 { backgroundColor: tTheme.sidebarActiveBackground }
                             ]}
                             onPress={() => handleNavigate(item.screen)}
@@ -102,11 +110,12 @@ export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
                             ]}>
                                 {t[item.name]}
                             </Text>
-                            {(item.screen === 'Pilotage' || item.screen === 'Administration') && (
+                            {(item.screen === 'Pilotage' || item.screen === 'Administration' || item.screen === 'Ventes') && (
                                 <Ionicons 
                                     name={
                                         (item.screen === 'Pilotage' && reportingExpanded) ||
-                                        (item.screen === 'Administration' && administrationExpanded)
+                                        (item.screen === 'Administration' && administrationExpanded) ||
+                                        (item.screen === 'Ventes' && salesExpanded)
                                             ? "chevron-down" 
                                             : "chevron-forward"
                                     } 
@@ -158,6 +167,74 @@ export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
                                         { color: activeScreen === 'AdministrationFournisseurs' ? tTheme.sidebarActiveText : tTheme.sidebarText }
                                     ]}>
                                         Fournisseurs
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                        
+                        {/* Sous-menu Ventes */}
+                        {item.screen === 'Ventes' && salesExpanded && (
+                            <View style={styles.submenu}>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.submenuItem,
+                                        activeScreen === 'VentesDevis' && 
+                                        { backgroundColor: tTheme.sidebarActiveBackground }
+                                    ]}
+                                    onPress={() => handleNavigate('VentesDevis')}
+                                >
+                                    <Ionicons 
+                                        name="document-text-outline" 
+                                        size={20} 
+                                        color={activeScreen === 'VentesDevis' ? tTheme.sidebarActiveText : tTheme.sidebarText} 
+                                    />
+                                    <Text style={[
+                                        styles.submenuText,
+                                        { color: activeScreen === 'VentesDevis' ? tTheme.sidebarActiveText : tTheme.sidebarText }
+                                    ]}>
+                                        Devis
+                                    </Text>
+                                </TouchableOpacity>
+                                
+                                <TouchableOpacity
+                                    style={[
+                                        styles.submenuItem,
+                                        activeScreen === 'VentesFactures' && 
+                                        { backgroundColor: tTheme.sidebarActiveBackground }
+                                    ]}
+                                    onPress={() => handleNavigate('VentesFactures')}
+                                >
+                                    <Ionicons 
+                                        name="receipt-outline" 
+                                        size={20} 
+                                        color={activeScreen === 'VentesFactures' ? tTheme.sidebarActiveText : tTheme.sidebarText} 
+                                    />
+                                    <Text style={[
+                                        styles.submenuText,
+                                        { color: activeScreen === 'VentesFactures' ? tTheme.sidebarActiveText : tTheme.sidebarText }
+                                    ]}>
+                                        Factures
+                                    </Text>
+                                </TouchableOpacity>
+                                
+                                <TouchableOpacity
+                                    style={[
+                                        styles.submenuItem,
+                                        activeScreen === 'VentesBonsLivraison' && 
+                                        { backgroundColor: tTheme.sidebarActiveBackground }
+                                    ]}
+                                    onPress={() => handleNavigate('VentesBonsLivraison')}
+                                >
+                                    <Ionicons 
+                                        name="cube-outline" 
+                                        size={20} 
+                                        color={activeScreen === 'VentesBonsLivraison' ? tTheme.sidebarActiveText : tTheme.sidebarText} 
+                                    />
+                                    <Text style={[
+                                        styles.submenuText,
+                                        { color: activeScreen === 'VentesBonsLivraison' ? tTheme.sidebarActiveText : tTheme.sidebarText }
+                                    ]}>
+                                        Bons de livraison
                                     </Text>
                                 </TouchableOpacity>
                             </View>

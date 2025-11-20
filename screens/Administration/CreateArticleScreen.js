@@ -1,10 +1,21 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
+import {
+    FormActions,
+    FormCard,
+    FormColumn,
+    FormInput,
+    FormPicker,
+    FormRow,
+    FormSecondaryButton,
+    FormSubmitButton
+} from '../../components/ModernForm';
+import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { getGlobalStyles } from '../../styles/GlobalStyles';
 
 export default function CreateArticleScreen({ navigation }) {
     const [name, setName] = useState('');
@@ -18,9 +29,12 @@ export default function CreateArticleScreen({ navigation }) {
     
     const [loading, setLoading] = useState(false);
     const [initialLoading, setInitialLoading] = useState(true);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
+    
     const { user, theme, language } = useAuth();
     const tTheme = themes[theme];
     const t = translations[language];
+    const globalStyles = getGlobalStyles(theme);
 
     useEffect(() => {
         fetchSuppliers();
@@ -36,7 +50,7 @@ export default function CreateArticleScreen({ navigation }) {
             
         if (error) {
             console.error('Error fetching suppliers:', error);
-            Alert.alert(t.error || 'Erreur', 'Impossible de charger les fournisseurs');
+            setToast({ visible: true, message: 'Impossible de charger les fournisseurs', type: 'error' });
         } else {
             setSuppliers(data || []);
         }
@@ -45,9 +59,10 @@ export default function CreateArticleScreen({ navigation }) {
 
     const handleSave = async () => {
         if (!name || !salePrice) {
-            Alert.alert(t.error, 'Le nom et le prix de vente sont requis.');
+            setToast({ visible: true, message: 'Le nom et le prix de vente sont requis', type: 'error' });
             return;
         }
+        
         setLoading(true);
         const { error } = await supabase
             .from('items')
@@ -63,17 +78,19 @@ export default function CreateArticleScreen({ navigation }) {
             }]);
 
         if (error) {
-            Alert.alert(t.error, error.message);
+            setToast({ visible: true, message: error.message, type: 'error' });
+            setLoading(false);
         } else {
-            Alert.alert(t.success, 'Article ajouté avec succès!');
-            navigation.goBack();
+            setToast({ visible: true, message: 'Article ajouté avec succès!', type: 'success' });
+            setTimeout(() => {
+                navigation.goBack();
+            }, 1500);
         }
-        setLoading(false);
     };
 
     if (initialLoading) {
         return (
-            <View style={[styles.container, styles.centered, { backgroundColor: tTheme.background }]}>
+            <View style={[globalStyles.container, styles.centered, { backgroundColor: tTheme.background }]}>
                 <ActivityIndicator size="large" color={tTheme.primary} />
                 <Text style={[styles.loadingText, { color: tTheme.textSecondary }]}>Chargement...</Text>
             </View>
@@ -81,74 +98,136 @@ export default function CreateArticleScreen({ navigation }) {
     }
 
     return (
-        <ScrollView style={[styles.container, { backgroundColor: tTheme.background }]}>
-            <Text style={[styles.label, { color: tTheme.text }]}>{t.itemName} *</Text>
-            <TextInput style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text }]} value={name} onChangeText={setName} />
-            
-            <Text style={[styles.label, { color: tTheme.text }]}>{t.reference}</Text>
-            <TextInput style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text }]} value={reference} onChangeText={setReference} />
+        <>
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
+            <ScrollView 
+                style={[globalStyles.container, { backgroundColor: tTheme.background }]}
+                showsVerticalScrollIndicator={false}
+            >
+                <View style={styles.content}>
+                    {/* Informations de base */}
+                    <FormCard title="Informations de base" icon="information-circle" theme={theme}>
+                        <FormInput
+                            label="Nom de l'article"
+                            value={name}
+                            onChangeText={setName}
+                            placeholder="Ex: Ordinateur portable"
+                            required
+                            theme={theme}
+                            icon="pricetag-outline"
+                        />
+                        
+                        <FormInput
+                            label="Référence"
+                            value={reference}
+                            onChangeText={setReference}
+                            placeholder="Ex: REF-001"
+                            theme={theme}
+                            icon="barcode-outline"
+                        />
 
-            <Text style={[styles.label, { color: tTheme.text }]}>Fournisseur</Text>
-            <View style={[styles.pickerContainer, { backgroundColor: tTheme.card, borderColor: '#ccc' }]}>
-                <Picker
-                    selectedValue={supplierId || '__empty__'}
-                    onValueChange={(value) => {
-                        const actualValue = value === '__empty__' ? '' : value;
-                        setSupplierId(actualValue);
-                    }}
-                    style={{ color: tTheme.text }}
-                >
-                    <Picker.Item label="-- Sélectionner un fournisseur (optionnel) --" value="__empty__" />
-                    {suppliers.map(supplier => (
-                        <Picker.Item key={supplier.id} label={supplier.name} value={supplier.id} />
-                    ))}
-                </Picker>
-            </View>
+                        <FormPicker
+                            label="Fournisseur"
+                            selectedValue={supplierId}
+                            onValueChange={setSupplierId}
+                            items={suppliers.map(s => ({ label: s.name, value: s.id }))}
+                            placeholder="-- Sélectionner un fournisseur (optionnel) --"
+                            theme={theme}
+                            icon="business-outline"
+                        />
+                    </FormCard>
 
-            <View style={styles.row}>
-                <View style={styles.column}>
-                    <Text style={[styles.label, { color: tTheme.text }]}>Prix de Vente *</Text>
-                    <TextInput style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text }]} value={salePrice} onChangeText={setSalePrice} keyboardType="numeric" />
-                </View>
-                <View style={styles.column}>
-                    <Text style={[styles.label, { color: tTheme.text }]}>Prix d'Achat</Text>
-                    <TextInput style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text }]} value={purchasePrice} onChangeText={setPurchasePrice} keyboardType="numeric" />
-                </View>
-            </View>
+                    {/* Prix */}
+                    <FormCard title="Prix" icon="cash" theme={theme}>
+                        <FormRow>
+                            <FormColumn>
+                                <FormInput
+                                    label="Prix de Vente"
+                                    value={salePrice}
+                                    onChangeText={setSalePrice}
+                                    placeholder="0.000"
+                                    keyboardType="numeric"
+                                    required
+                                    theme={theme}
+                                    icon="trending-up"
+                                />
+                            </FormColumn>
+                            <FormColumn>
+                                <FormInput
+                                    label="Prix d'Achat"
+                                    value={purchasePrice}
+                                    onChangeText={setPurchasePrice}
+                                    placeholder="0.000"
+                                    keyboardType="numeric"
+                                    theme={theme}
+                                    icon="trending-down"
+                                />
+                            </FormColumn>
+                        </FormRow>
 
-            <View style={styles.row}>
-                <View style={styles.column}>
-                    <Text style={[styles.label, { color: tTheme.text }]}>TVA (%)</Text>
-                    <TextInput style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text }]} value={vatRate} onChangeText={setVatRate} keyboardType="numeric" />
-                </View>
-                <View style={styles.column}>
-                    <Text style={[styles.label, { color: tTheme.text }]}>Stock Initial</Text>
-                    <TextInput style={[styles.input, { backgroundColor: tTheme.card, color: tTheme.text }]} value={stock} onChangeText={setStock} keyboardType="numeric" />
-                </View>
-            </View>
+                        <FormRow>
+                            <FormColumn>
+                                <FormInput
+                                    label="TVA (%)"
+                                    value={vatRate}
+                                    onChangeText={setVatRate}
+                                    placeholder="19"
+                                    keyboardType="numeric"
+                                    theme={theme}
+                                    icon="calculator"
+                                />
+                            </FormColumn>
+                            <FormColumn>
+                                <FormInput
+                                    label="Stock Initial"
+                                    value={stock}
+                                    onChangeText={setStock}
+                                    placeholder="0"
+                                    keyboardType="numeric"
+                                    theme={theme}
+                                    icon="cube"
+                                />
+                            </FormColumn>
+                        </FormRow>
+                    </FormCard>
 
-            <TouchableOpacity style={[styles.saveButton, { backgroundColor: tTheme.accent }]} onPress={handleSave} disabled={loading}>
-                <Ionicons name="save-outline" size={22} color="#fff" />
-                <Text style={styles.saveButtonText}>{loading ? t.saving : t.save}</Text>
-            </TouchableOpacity>
-        </ScrollView>
+                    {/* Actions */}
+                    <FormActions>
+                        <FormSecondaryButton
+                            label="Annuler"
+                            onPress={() => navigation.goBack()}
+                            theme={theme}
+                        />
+                        <FormSubmitButton
+                            label={loading ? 'Enregistrement...' : 'Enregistrer'}
+                            onPress={handleSave}
+                            loading={loading}
+                            theme={theme}
+                        />
+                    </FormActions>
+                </View>
+            </ScrollView>
+        </>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: 20 },
-    centered: { justifyContent: 'center', alignItems: 'center' },
-    loadingText: { marginTop: 12, fontSize: 16 },
-    label: { fontSize: 16, marginBottom: 8, fontWeight: 'bold' },
-    input: { borderWidth: 1, borderColor: '#ccc', padding: 12, marginBottom: 18, borderRadius: 8, fontSize: 16 },
-    pickerContainer: { 
-        borderWidth: 1, 
-        borderRadius: 8, 
-        marginBottom: 18,
-        overflow: 'hidden'
+    centered: { 
+        flex: 1, 
+        justifyContent: 'center', 
+        alignItems: 'center' 
     },
-    row: { flexDirection: 'row', justifyContent: 'space-between' },
-    column: { flex: 1, marginRight: 10 },
-    saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 15, borderRadius: 30, elevation: 3, marginTop: 10, marginBottom: 40 },
-    saveButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginLeft: 10 },
+    loadingText: { 
+        marginTop: 12, 
+        fontSize: 16 
+    },
+    content: {
+        padding: 16,
+    },
 });

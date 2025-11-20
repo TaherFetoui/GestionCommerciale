@@ -1,10 +1,20 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, TextInput, ScrollView, SafeAreaView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { supabase } from '../../lib/supabase';
+import { useState } from 'react';
+import { ScrollView } from 'react-native';
+import {
+    FormActions,
+    FormCard,
+    FormColumn,
+    FormInput,
+    FormRow,
+    FormSecondaryButton,
+    FormSubmitButton,
+    ModernFormModal
+} from '../../components/ModernForm';
+import Toast from '../../components/Toast';
+import { translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
-import { themes, translations } from '../../constants/AppConfig';
-import Ionicons from '@expo/vector-icons/Ionicons';
+import { supabase } from '../../lib/supabase';
 import { getGlobalStyles } from '../../styles/GlobalStyles';
 
 export default function CreateClientScreen() {
@@ -16,14 +26,18 @@ export default function CreateClientScreen() {
     const [phone, setPhone] = useState('');
     const [email, setEmail] = useState('');
     const [loading, setLoading] = useState(false);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     const styles = getGlobalStyles(theme);
-    const tTheme = themes[theme];
     const t = translations[language];
 
     const handleSaveClient = async () => {
         if (!name) {
-            Alert.alert(t.error, `${t.raisonSociale} ${t.requiredField}`);
+            setToast({
+                visible: true,
+                message: `${t.raisonSociale} ${t.requiredField}`,
+                type: 'error',
+            });
             return;
         }
         setLoading(true);
@@ -38,92 +52,114 @@ export default function CreateClientScreen() {
         }]);
 
         if (error) {
-            Alert.alert(t.error, error.message);
+            setToast({
+                visible: true,
+                message: error.message,
+                type: 'error',
+            });
         } else {
-            Alert.alert(t.success, 'Client ajouté avec succès!');
-            navigation.goBack();
+            setToast({
+                visible: true,
+                message: 'Client ajouté avec succès!',
+                type: 'success',
+            });
+            setTimeout(() => navigation.goBack(), 1500);
         }
         setLoading(false);
     };
 
     return (
-        <View style={[localStyles.container, { backgroundColor: tTheme.background }]}>
-            <SafeAreaView style={[localStyles.formContainer, { backgroundColor: tTheme.card, borderColor: tTheme.border }]}>
-                <ScrollView>
-                    <View style={[localStyles.header, { borderBottomColor: tTheme.border }]}>
-                        <Text style={[localStyles.title, { color: tTheme.text }]}>{t.createClient}</Text>
-                        <TouchableOpacity onPress={() => navigation.goBack()}>
-                            <Ionicons name="close" size={26} color={tTheme.textSecondary} />
-                        </TouchableOpacity>
-                    </View>
+        <>
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
+            <ModernFormModal
+                visible={true}
+                onClose={() => navigation.goBack()}
+                title={t.createClient}
+                theme={theme}
+            >
+                <ScrollView showsVerticalScrollIndicator={false}>
+                    <FormCard title="Informations personnelles" icon="person" theme={theme}>
+                        <FormInput
+                            label={t.raisonSociale}
+                            value={name}
+                            onChangeText={setName}
+                            placeholder="Nom de l'entreprise"
+                            icon="business"
+                            required
+                            theme={theme}
+                        />
 
-                    <View style={{ padding: 20 }}>
-                        <Text style={styles.label}>{t.raisonSociale} *</Text>
-                        <TextInput style={styles.input} value={name} onChangeText={setName} />
+                        <FormInput
+                            label={t.matriculeFiscale}
+                            value={taxId}
+                            onChangeText={setTaxId}
+                            placeholder="Matricule fiscale"
+                            icon="card"
+                            theme={theme}
+                        />
+                    </FormCard>
 
-                        <Text style={styles.label}>{t.matriculeFiscale}</Text>
-                        <TextInput style={styles.input} value={taxId} onChangeText={setTaxId} />
-                        
-                        <View style={localStyles.inputRow}>
-                            <View style={{ flex: 1, marginRight: 8 }}>
-                                <Text style={styles.label}>Email</Text>
-                                <TextInput style={styles.input} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-                            </View>
-                            <View style={{ flex: 1, marginLeft: 8 }}>
-                                <Text style={styles.label}>Téléphone</Text>
-                                <TextInput style={styles.input} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-                            </View>
-                        </View>
-                        
-                        <Text style={styles.label}>{t.address}</Text>
-                        <TextInput style={[styles.input, { height: 100, textAlignVertical: 'top' }]} value={address} onChangeText={setAddress} multiline />
-                    </View>
+                    <FormCard title="Coordonnées" icon="call" theme={theme}>
+                        <FormRow>
+                            <FormColumn>
+                                <FormInput
+                                    label="Email"
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    placeholder="email@exemple.com"
+                                    icon="mail"
+                                    keyboardType="email-address"
+                                    theme={theme}
+                                />
+                            </FormColumn>
+                            <FormColumn>
+                                <FormInput
+                                    label="Téléphone"
+                                    value={phone}
+                                    onChangeText={setPhone}
+                                    placeholder="+216 XX XXX XXX"
+                                    icon="call"
+                                    keyboardType="phone-pad"
+                                    theme={theme}
+                                />
+                            </FormColumn>
+                        </FormRow>
+
+                        <FormInput
+                            label={t.address}
+                            value={address}
+                            onChangeText={setAddress}
+                            placeholder="Adresse complète"
+                            icon="location"
+                            multiline
+                            theme={theme}
+                        />
+                    </FormCard>
+
+                    <FormActions>
+                        <FormSecondaryButton
+                            onPress={() => navigation.goBack()}
+                            disabled={loading}
+                            theme={theme}
+                        >
+                            Annuler
+                        </FormSecondaryButton>
+                        <FormSubmitButton
+                            onPress={handleSaveClient}
+                            loading={loading}
+                            theme={theme}
+                        >
+                            {loading ? t.saving : t.save}
+                        </FormSubmitButton>
+                    </FormActions>
                 </ScrollView>
-                <View style={[localStyles.footer, { borderTopColor: tTheme.border }]}>
-                    <TouchableOpacity style={[styles.primaryButton, { width: '100%' }]} onPress={handleSaveClient} disabled={loading}>
-                        <Text style={styles.primaryButtonText}>{loading ? t.saving : t.save}</Text>
-                    </TouchableOpacity>
-                </View>
-            </SafeAreaView>
-        </View>
+            </ModernFormModal>
+        </>
     );
 }
-
-const localStyles = StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    formContainer: {
-        width: '90%',
-        maxWidth: 500,
-        maxHeight: '90%',
-        borderRadius: 16,
-        borderWidth: 1,
-        overflow: 'hidden',
-        elevation: 10,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 5 },
-        shadowOpacity: 0.15,
-        shadowRadius: 15,
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 20,
-        borderBottomWidth: 1,
-    },
-    title: {
-        fontSize: 20,
-        fontWeight: 'bold',
-    },
-    footer: {
-        padding: 20,
-        borderTopWidth: 1,
-    },
-    inputRow: {
-        flexDirection: 'row',
-    },
-});

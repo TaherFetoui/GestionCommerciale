@@ -41,7 +41,11 @@ const MainContent = React.memo(({ screen }) => {
             case 'Achats':
                 return PurchasesStack;
             case 'Ventes':
-                return SalesStack;
+            case 'VentesDevis':
+            case 'VentesFactures':
+            case 'VentesBonsLivraison':
+                // Utiliser une clé unique pour forcer le re-render
+                return () => <SalesStack key={screen} initialScreen={screen} />;
             case 'Finance':
                 return FinanceStack;
             case 'Pilotage':
