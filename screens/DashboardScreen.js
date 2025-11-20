@@ -508,17 +508,23 @@ const BarChart3D = React.memo(({ data, title, theme }) => {
     }
     
     const maxValue = Math.max(...data.map(d => d.value));
-    const chartHeight = 200;
-    const barWidth = 40;
-    const spacing = 20;
+    const chartHeight = 220;
+    const barWidth = 50;
+    const spacing = 25;
     
     return (
         <View style={[getGlobalStyles(theme).card, localStyles.chartContainer]}>
             <Text style={[localStyles.chartTitle, { color: tTheme.text }]}>{title}</Text>
             
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={localStyles.chartScroll}>
-                <View style={localStyles.barsContainer}>
-                    {data.map((item, index) => {
+            <View style={localStyles.chartContentWrapper}>
+                <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false} 
+                    contentContainerStyle={localStyles.scrollContent}
+                    style={localStyles.chartScroll}
+                >
+                    <View style={localStyles.barsContainer}>
+                        {data.map((item, index) => {
                         const barHeight = (item.value / maxValue) * chartHeight;
                         const isSelected = selectedBar === index;
                         
@@ -571,6 +577,7 @@ const BarChart3D = React.memo(({ data, title, theme }) => {
                     })}
                 </View>
             </ScrollView>
+            </View>
         </View>
     );
 });
@@ -1572,6 +1579,7 @@ const localStyles = StyleSheet.create({
     chartWrapper: {
         flex: 1,
         minWidth: 400,
+        maxWidth: 'calc(50% - 12px)',
         margin: 6,
         overflow: 'hidden',
     },
@@ -1581,14 +1589,15 @@ const localStyles = StyleSheet.create({
     },
     chartContainer: {
         marginTop: 8,
-        minHeight: 320,
+        minHeight: 380,
+        maxHeight: 380,
         padding: 20,
-        overflow: 'hidden',
     },
     chartTitle: {
         fontSize: 18,
         fontWeight: '700',
         marginBottom: 20,
+        textAlign: 'center',
     },
     chartPlaceholder: {
         alignItems: 'center',
@@ -1596,14 +1605,26 @@ const localStyles = StyleSheet.create({
         minHeight: 260,
         paddingVertical: 40,
     },
+    chartContentWrapper: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'visible',
+    },
     chartScroll: {
-        marginTop: 10,
+        flexGrow: 0,
+    },
+    scrollContent: {
+        flexGrow: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     barsContainer: {
         flexDirection: 'row',
         alignItems: 'flex-end',
-        height: 240,
+        height: 260,
         paddingHorizontal: 20,
+        paddingTop: 40,
     },
     barWrapper: {
         alignItems: 'center',
@@ -1658,7 +1679,7 @@ const localStyles = StyleSheet.create({
         fontWeight: '600',
     },
     barLabel: {
-        fontSize: 11,
+        fontSize: 12,
         marginTop: 8,
         textAlign: 'center',
         fontWeight: '500',

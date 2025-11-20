@@ -14,7 +14,6 @@ const navItems = [
     { name: 'stock', icon: 'cube-outline', screen: 'Stock' },
     { name: 'finance', icon: 'wallet-outline', screen: 'Finance' },
     { name: 'reporting', icon: 'analytics-outline', screen: 'Pilotage' },
-    { name: 'appSettings', icon: 'settings-outline', screen: 'Réglages' },
 ];
 
 export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
@@ -290,10 +289,14 @@ export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
                 ))}
             </View>
 
-            <TouchableOpacity style={styles.footer} onPress={() => signOut()}>
-                <Ionicons name="log-out-outline" size={22} color={tTheme.sidebarText} />
-                <Text style={[styles.navText, { color: tTheme.sidebarText }]}>{t.logout}</Text>
-            </TouchableOpacity>
+            <View style={styles.footer}>
+                <Text style={[styles.creditText, { color: tTheme.sidebarText }]}>
+                    Développé par
+                </Text>
+                <Text style={[styles.creditText, { color: tTheme.sidebarText, fontWeight: '600' }]}>
+                    Taher Fetoui & Hiba Bouchaala
+                </Text>
+            </View>
         </View>
     );
 }
@@ -365,13 +368,17 @@ const styles = StyleSheet.create({
         fontWeight: '400',
     },
     footer: { 
-        paddingVertical: 14, 
-        flexDirection: 'row', 
-        alignItems: 'center', 
+        paddingVertical: 14,
         paddingHorizontal: 12,
         borderTopWidth: 1,
         borderTopColor: 'rgba(255, 255, 255, 0.08)',
         marginTop: 6,
         flexShrink: 0,
+    },
+    creditText: {
+        fontSize: 11,
+        textAlign: 'center',
+        opacity: 0.7,
+        lineHeight: 16,
     }
 });

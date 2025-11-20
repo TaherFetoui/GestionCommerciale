@@ -34,6 +34,8 @@ export default function ClientsListScreen() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [clientToDelete, setClientToDelete] = useState(null);
 
   // --- Styles & Translations ---
   const styles = getGlobalStyles(theme);
@@ -138,33 +140,34 @@ export default function ClientsListScreen() {
     setIsSaving(false);
   };
 
-  const confirmDeleteClient = () => {
-    Alert.alert(
-        t.confirmDelete,
-        `${t.areYouSure} "${selectedClient?.name}" ?`,
-        [
-            { text: t.cancel, style: 'cancel' },
-            { text: t.delete, style: 'destructive', onPress: () => handleDeleteClient() }
-        ]
-    );
-  };
-
-  const handleDeleteClient = async () => {
-    setIsSaving(true);
-    const { error } = await supabase
+  const confirmDeleteClient = useCallback(async () => {
+    if (!clientToDelete) return;
+    
+    setDeleteModalVisible(false);
+    
+    try {
+      const { error } = await supabase
         .from('clients')
         .delete()
-        .eq('id', selectedClient.id);
-    
-    if (error) {
+        .eq('id', clientToDelete.id);
+
+      if (error) {
         Alert.alert(t.error, error.message);
-    } else {
-        Alert.alert(t.success, t.clientDeleted);
-        setIsModalVisible(false);
-        fetchClients();
+      } else {
+        setClients(prev => prev.filter(client => client.id !== clientToDelete.id));
+        Alert.alert('✓ Succès', 'Client supprimé avec succès');
+      }
+    } catch (error) {
+      Alert.alert(t.error, 'Impossible de supprimer le client');
     }
-    setIsSaving(false);
-  };
+    
+    setClientToDelete(null);
+  }, [clientToDelete, t.error]);
+
+  const cancelDelete = useCallback(() => {
+    setDeleteModalVisible(false);
+    setClientToDelete(null);
+  }, []);
 
   // Table columns configuration
   const tableColumns = [
@@ -220,23 +223,31 @@ export default function ClientsListScreen() {
       flex: 1,
       render: (row) => (
         <View style={localStyles.actionsContainer}>
-          <ModernActionButton
-            icon="create-outline"
-            onPress={() => handleClientPress(row)}
-            theme={theme}
-            variant="secondary"
-            compact
-          />
-          <ModernActionButton
-            icon="trash-outline"
-            onPress={() => {
-              setSelectedClient(row);
-              confirmDeleteClient();
+          <TouchableOpacity
+            style={[localStyles.actionButton, { backgroundColor: tTheme.primary + '15' }]}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleClientPress(row);
             }}
-            theme={theme}
-            variant="danger"
-            compact
-          />
+          >
+            <Ionicons name="create-outline" size={18} color={tTheme.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            style={[localStyles.deleteButton, { 
+              backgroundColor: '#FEE2E2',
+              borderColor: '#EF4444'
+            }]}
+            onPress={(e) => {
+              if (e && e.stopPropagation) {
+                e.stopPropagation();
+              }
+              setClientToDelete(row);
+              setDeleteModalVisible(true);
+            }}
+          >
+            <Ionicons name="trash" size={18} color="#DC2626" />
+          </TouchableOpacity>
         </View>
       ),
     },
@@ -335,6 +346,64 @@ export default function ClientsListScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={deleteModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelDelete}
+      >
+        <View style={localStyles.modalOverlay}>
+          <View style={[localStyles.deleteModalContainer, { backgroundColor: tTheme.card }]}>
+            {/* Icon */}
+            <View style={[localStyles.modalIconContainer, { backgroundColor: '#FEE2E2' }]}>
+              <Ionicons name="warning" size={48} color="#DC2626" />
+            </View>
+
+            {/* Title */}
+            <Text style={[localStyles.deleteModalTitle, { color: tTheme.text }]}>
+              Supprimer le client
+            </Text>
+
+            {/* Message */}
+            <Text style={[localStyles.modalMessage, { color: tTheme.textSecondary }]}>
+              Voulez-vous vraiment supprimer le client{'\n'}
+              <Text style={{ fontWeight: 'bold', color: tTheme.primary }}>
+                {clientToDelete?.name}
+              </Text>
+              {'\n\n'}
+              <Text style={{ color: '#DC2626', fontWeight: '600' }}>
+                Cette action est irréversible.
+              </Text>
+            </Text>
+
+            {/* Buttons */}
+            <View style={localStyles.modalButtons}>
+              <TouchableOpacity
+                style={[localStyles.modalButton, localStyles.cancelButton, { backgroundColor: tTheme.border }]}
+                onPress={cancelDelete}
+                activeOpacity={0.7}
+              >
+                <Text style={[localStyles.modalButtonText, { color: tTheme.text }]}>
+                  Annuler
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[localStyles.modalButton, { backgroundColor: '#DC2626' }]}
+                onPress={confirmDeleteClient}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="trash" size={18} color="#FFFFFF" />
+                <Text style={[localStyles.modalButtonText, { color: '#FFFFFF', marginLeft: 6 }]}>
+                  Supprimer
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -374,6 +443,27 @@ const localStyles = StyleSheet.create({
   actionsContainer: {
     flexDirection: 'row',
     gap: 8,
+    alignItems: 'center',
+  },
+  actionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   modalContainer: {
     flex: 1,
@@ -413,5 +503,68 @@ const localStyles = StyleSheet.create({
   },
   inputRow: {
     flexDirection: 'row',
+  },
+  // Delete Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  deleteModalContainer: {
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  deleteModalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  modalMessage: {
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  cancelButton: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

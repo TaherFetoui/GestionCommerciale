@@ -200,6 +200,15 @@ export default function DeliveryNotesListScreen() {
                 render: (row) => (
                     <View style={localStyles.actionsContainer}>
                         <TouchableOpacity
+                            style={[localStyles.actionButton, { backgroundColor: tTheme.primary + '15' }]}
+                            onPress={(e) => {
+                                e.stopPropagation();
+                                Alert.alert('Impression', `Impression du bon ${row.delivery_note_number}`);
+                            }}
+                        >
+                            <Ionicons name="print-outline" size={18} color={tTheme.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
                             activeOpacity={0.7}
                             style={[localStyles.deleteButton, { 
                                 backgroundColor: '#FEE2E2',
@@ -365,13 +374,25 @@ const localStyles = StyleSheet.create({
         gap: 8,
         alignItems: 'center',
     },
-    deleteButton: {
-        width: 32,
-        height: 32,
+    actionButton: {
+        width: 36,
+        height: 36,
         borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
-        borderWidth: 1,
+    },
+    deleteButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        shadowColor: '#DC2626',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 2,
     },
     modalOverlay: {
         flex: 1,
