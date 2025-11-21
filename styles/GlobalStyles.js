@@ -349,6 +349,9 @@ export const getGlobalStyles = (theme) => {
   });
 };
 
+// Export themes from AppConfig for convenience
+export { themes };
+
 // Export utility functions for custom 3D effects
 export const ThreeDUtils = {
   create3DEffect,

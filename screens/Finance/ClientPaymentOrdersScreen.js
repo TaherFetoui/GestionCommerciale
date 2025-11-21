@@ -4,10 +4,10 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useCallback, useLayoutEffect, useState } from 'react';
 import { Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { ModernActionButton, ModernFilterChip, ModernSearchBar, ModernStatusBadge, ModernTable } from '../../components/ModernUIComponents';
-import { themes } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { getGlobalStyles } from '../../styles/GlobalStyles';
+import { printFinanceDocument } from '../../services/pdfGenerator';
+import { getGlobalStyles, themes } from '../../styles/GlobalStyles';
 
 export default function ClientPaymentOrdersScreen() {
     const navigation = useNavigation();
@@ -15,6 +15,7 @@ export default function ClientPaymentOrdersScreen() {
     const [filteredOrders, setFilteredOrders] = useState([]);
     const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [companyInfo, setCompanyInfo] = useState({});
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -22,6 +23,7 @@ export default function ClientPaymentOrdersScreen() {
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState(null);
+    const [orderToDelete, setOrderToDelete] = useState(null);
 
     const [formOrderNumber, setFormOrderNumber] = useState('');
     const [formClient, setFormClient] = useState('');
@@ -39,6 +41,13 @@ export default function ClientPaymentOrdersScreen() {
     const styles = getGlobalStyles(theme);
 
     useLayoutEffect(() => {
+        const fetchCompanyInfo = async () => {
+            if (!user?.id) return;
+            const { data } = await supabase.from('company_info').select('*').eq('user_id', user.id).single();
+            if (data) setCompanyInfo(data);
+        };
+        fetchCompanyInfo();
+
         navigation.setOptions({
             headerRight: () => (
                 <View style={{ flexDirection: 'row', gap: 12, marginRight: 8 }}>
@@ -120,13 +129,21 @@ export default function ClientPaymentOrdersScreen() {
     const handleDeleteOrder = useCallback((item) => { setSelectedOrder(item); setDeleteModalVisible(true); }, []);
 
     const confirmDelete = useCallback(async () => {
-        if (!selectedOrder) return;
-        setSaveLoading(true);
-        const { error } = await supabase.from('client_payment_orders').delete().eq('id', selectedOrder.id);
-        if (error) alert('Erreur');
-        else { setDeleteModalVisible(false); setSelectedOrder(null); await fetchOrders(); }
-        setSaveLoading(false);
-    }, [selectedOrder, fetchOrders]);
+        if (!orderToDelete) return;
+        setDeleteModalVisible(false);
+        const { error } = await supabase.from('client_payment_orders').delete().eq('id', orderToDelete.id);
+        if (error) {
+            alert('Erreur lors de la suppression');
+        } else {
+            setOrders(prevOrders => prevOrders.filter(o => o.id !== orderToDelete.id));
+        }
+        setOrderToDelete(null);
+    }, [orderToDelete]);
+
+    const cancelDelete = useCallback(() => {
+        setDeleteModalVisible(false);
+        setOrderToDelete(null);
+    }, []);
 
     const handleSaveNewOrder = useCallback(async () => {
         if (!formClient || !formAmount) { alert('Champs obligatoires manquants'); return; }
@@ -167,34 +184,70 @@ export default function ClientPaymentOrdersScreen() {
         setSaveLoading(false);
     }, [selectedOrder, formOrderNumber, formClient, formAmount, formPaymentMethod, formBankAccount, formReceiptDate, formInvoiceRef, formStatus, formNote, fetchOrders]);
 
-    const tableColumns = [
-        { key: 'order_number', label: 'N° Ordre', width: 140 },
-        { key: 'client', label: 'Client', width: 180 },
-        { key: 'amount', label: 'Montant', width: 120, align: 'right' },
-        { key: 'payment_method', label: 'Méthode', width: 120 },
-        { key: 'payment_date', label: 'Date', width: 120 },
-        { key: 'status', label: 'Statut', width: 120 },
-        { key: 'actions', label: 'Actions', width: 150 },
-    ];
-
     const getStatusVariant = (status) => ({ pending: 'warning', received: 'success', cancelled: 'error' }[status] || 'default');
     const getStatusLabel = (status) => ({ pending: 'En attente', received: 'Reçu', cancelled: 'Annulé' }[status] || status);
     const getPaymentMethodLabel = (method) => ({ check: 'Chèque', transfer: 'Virement', cash: 'Espèces', card: 'Carte' }[method] || method);
 
-    const renderTableRow = (item) => ({
-        order_number: item.order_number || '-',
-        client: item.client || '-',
-        amount: `${parseFloat(item.amount || 0).toFixed(3)} TND`,
-        payment_method: getPaymentMethodLabel(item.payment_method),
-        payment_date: item.payment_date || '-',
-        status: <ModernStatusBadge label={getStatusLabel(item.status)} variant={getStatusVariant(item.status)} />,
-        actions: (
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity onPress={() => handleEditOrder(item)} style={[localStyles.actionButton, { backgroundColor: tTheme.primary + '20' }]}><Ionicons name="pencil" size={16} color={tTheme.primary} /></TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDeleteOrder(item)} style={[localStyles.actionButton, { backgroundColor: '#ff444420' }]}><Ionicons name="trash" size={16} color="#ff4444" /></TouchableOpacity>
-            </View>
-        ),
-    });
+    const tableColumns = [
+        { 
+            key: 'order_number', 
+            label: 'N° Ordre', 
+            flex: 1.2,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.order_number || '-'}</Text>
+        },
+        { 
+            key: 'client', 
+            label: 'Client', 
+            flex: 1.5,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.client || '-'}</Text>
+        },
+        { 
+            key: 'amount', 
+            label: 'Montant', 
+            flex: 1,
+            render: (item) => <Text style={{ color: tTheme.text, textAlign: 'right' }}>{parseFloat(item.amount || 0).toFixed(3)} TND</Text>
+        },
+        { 
+            key: 'payment_method', 
+            label: 'Méthode', 
+            flex: 1,
+            render: (item) => <Text style={{ color: tTheme.text }}>{getPaymentMethodLabel(item.payment_method)}</Text>
+        },
+        { 
+            key: 'payment_date', 
+            label: 'Date', 
+            flex: 1,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.payment_date || '-'}</Text>
+        },
+        { 
+            key: 'status', 
+            label: 'Statut', 
+            flex: 1,
+            render: (item) => <ModernStatusBadge label={getStatusLabel(item.status)} variant={getStatusVariant(item.status)} />
+        },
+        { 
+            key: 'actions', 
+            label: 'Actions', 
+            flex: 1,
+            render: (item) => (
+                <View style={localStyles.actionsContainer}>
+                    <TouchableOpacity
+                        style={[localStyles.actionButton, { backgroundColor: tTheme.primary + '15' }]}
+                        onPress={(e) => { e.stopPropagation(); printFinanceDocument(item, 'client_payment', companyInfo); }}
+                    >
+                        <Ionicons name="print-outline" size={18} color={tTheme.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        activeOpacity={0.7}
+                        style={[localStyles.deleteButton, { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]}
+                        onPress={(e) => { e.stopPropagation(); setOrderToDelete(item); setDeleteModalVisible(true); }}
+                    >
+                        <Ionicons name="trash" size={18} color="#DC2626" />
+                    </TouchableOpacity>
+                </View>
+            )
+        },
+    ];
 
     const renderForm = () => (
         <ScrollView style={{ maxHeight: 500 }}>
@@ -256,7 +309,7 @@ export default function ClientPaymentOrdersScreen() {
                     <ModernFilterChip label="Annulé" active={statusFilter === 'cancelled'} onPress={() => handleStatusFilter('cancelled')} />
                 </ScrollView>
             </View>
-            <ModernTable columns={tableColumns} data={filteredOrders} renderRow={renderTableRow} loading={loading} emptyMessage="Aucun encaissement trouvé" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} />
+            <ModernTable columns={tableColumns} data={filteredOrders} loading={loading} emptyMessage="Aucun encaissement trouvé" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} />
             <Modal visible={createModalVisible} animationType="slide" transparent={true} onRequestClose={() => setCreateModalVisible(false)}>
                 <View style={[styles.overlay, { backgroundColor: tTheme.overlay }]}>
                     <View style={[localStyles.modalContent, { backgroundColor: tTheme.card, ...tTheme.shadow.large }]}>
@@ -281,15 +334,33 @@ export default function ClientPaymentOrdersScreen() {
                     </View>
                 </View>
             </Modal>
-            <Modal visible={deleteModalVisible} animationType="fade" transparent={true} onRequestClose={() => setDeleteModalVisible(false)}>
-                <View style={[styles.overlay, { backgroundColor: tTheme.overlay }]}>
-                    <View style={[localStyles.deleteModal, { backgroundColor: tTheme.card, ...tTheme.shadow.large }]}>
-                        <Ionicons name="warning" size={48} color="#ff4444" />
-                        <Text style={[localStyles.deleteTitle, { color: tTheme.text }]}>Confirmer la suppression</Text>
-                        <Text style={[localStyles.deleteMessage, { color: tTheme.textSecondary }]}>Supprimer cet encaissement ?</Text>
-                        <View style={localStyles.deleteActions}>
-                            <TouchableOpacity style={[styles.secondaryButton, { flex: 1, borderColor: tTheme.border }]} onPress={() => setDeleteModalVisible(false)}><Text style={[styles.primaryButtonText, { color: tTheme.text }]}>Annuler</Text></TouchableOpacity>
-                            <TouchableOpacity style={[styles.primaryButton, { flex: 1, backgroundColor: '#ff4444' }]} onPress={confirmDelete} disabled={saveLoading}><Text style={styles.primaryButtonText}>{saveLoading ? 'Suppression...' : 'Supprimer'}</Text></TouchableOpacity>
+            {/* Delete Confirmation Modal */}
+            <Modal visible={deleteModalVisible} animationType="fade" transparent={true} onRequestClose={cancelDelete}>
+                <View style={localStyles.modalOverlay}>
+                    <View style={[localStyles.deleteModalContainer, { backgroundColor: tTheme.card, ...tTheme.shadow.large }]}>
+                        <View style={localStyles.modalIconContainer}>
+                            <Ionicons name="warning" size={48} color="#DC2626" />
+                        </View>
+                        <Text style={[localStyles.deleteModalTitle, { color: tTheme.text }]}>Confirmer la suppression</Text>
+                        <Text style={[localStyles.modalMessage, { color: tTheme.textSecondary }]}>
+                            Êtes-vous sûr de vouloir supprimer l'encaissement{' '}
+                            <Text style={{ fontWeight: '700', color: tTheme.text }}>{orderToDelete?.order_number}</Text> ?{' '}
+                            Cette action est irréversible.
+                        </Text>
+                        <View style={localStyles.modalButtons}>
+                            <TouchableOpacity
+                                style={[localStyles.modalButton, localStyles.cancelButton, { borderColor: tTheme.border }]}
+                                onPress={cancelDelete}
+                            >
+                                <Text style={[localStyles.modalButtonText, { color: tTheme.text }]}>Annuler</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[localStyles.modalButton, { backgroundColor: '#DC2626' }]}
+                                onPress={confirmDelete}
+                            >
+                                <Ionicons name="trash" size={18} color="#FFF" style={{ marginRight: 8 }} />
+                                <Text style={[localStyles.modalButtonText, { color: '#FFF' }]}>Supprimer</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
                 </View>
@@ -301,7 +372,9 @@ export default function ClientPaymentOrdersScreen() {
 const localStyles = StyleSheet.create({
     filtersContainer: { padding: 16, marginBottom: 16, borderRadius: 16, marginHorizontal: 16, marginTop: 16 },
     filterChips: { marginTop: 12 },
-    actionButton: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    actionsContainer: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+    actionButton: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    deleteButton: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, shadowColor: '#DC2626', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 },
     modalContent: { width: '90%', maxWidth: 700, maxHeight: '90%', borderRadius: 24, overflow: 'hidden' },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#eee' },
     modalTitle: { fontSize: 20, fontWeight: '700' },
@@ -313,8 +386,13 @@ const localStyles = StyleSheet.create({
     statusButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
     statusButton: { padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#ddd' },
     statusButtonText: { fontSize: 13, fontWeight: '600' },
-    deleteModal: { width: '90%', maxWidth: 400, borderRadius: 24, padding: 24, alignItems: 'center' },
-    deleteTitle: { fontSize: 20, fontWeight: '700', marginTop: 16, marginBottom: 8 },
-    deleteMessage: { fontSize: 14, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
-    deleteActions: { flexDirection: 'row', gap: 12, width: '100%' },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
+    deleteModalContainer: { width: '90%', maxWidth: 400, borderRadius: 24, padding: 32, alignItems: 'center' },
+    modalIconContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+    deleteModalTitle: { fontSize: 22, fontWeight: '700', marginBottom: 12, textAlign: 'center' },
+    modalMessage: { fontSize: 15, textAlign: 'center', marginBottom: 28, lineHeight: 22 },
+    modalButtons: { flexDirection: 'row', gap: 12, width: '100%' },
+    modalButton: { flex: 1, flexDirection: 'row', paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    cancelButton: { backgroundColor: 'transparent', borderWidth: 1.5 },
+    modalButtonText: { fontSize: 16, fontWeight: '600' },
 });

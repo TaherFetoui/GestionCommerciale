@@ -18,16 +18,18 @@ import {
     ModernStatusBadge,
     ModernTable,
 } from '../../components/ModernUIComponents';
-import { themes, translations } from '../../constants/AppConfig';
+import { translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { getGlobalStyles } from '../../styles/GlobalStyles';
+import { printFinanceDocument } from '../../services/pdfGenerator';
+import { getGlobalStyles, themes } from '../../styles/GlobalStyles';
 
 export default function BankAccountsScreen() {
     const navigation = useNavigation();
     const [accounts, setAccounts] = useState([]);
     const [filteredAccounts, setFilteredAccounts] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [companyInfo, setCompanyInfo] = useState({});
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [typeFilter, setTypeFilter] = useState('all');
@@ -35,6 +37,7 @@ export default function BankAccountsScreen() {
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [selectedAccount, setSelectedAccount] = useState(null);
+    const [accountToDelete, setAccountToDelete] = useState(null);
 
     // Form states
     const [formAccountType, setFormAccountType] = useState('bank');
@@ -58,6 +61,13 @@ export default function BankAccountsScreen() {
     const styles = getGlobalStyles(theme);
 
     useLayoutEffect(() => {
+        const fetchCompanyInfo = async () => {
+            if (!user?.id) return;
+            const { data } = await supabase.from('company_info').select('*').eq('user_id', user.id).single();
+            if (data) setCompanyInfo(data);
+        };
+        fetchCompanyInfo();
+
         navigation.setOptions({
             headerRight: () => (
                 <View style={{ flexDirection: 'row', gap: 12, marginRight: 8 }}>
@@ -166,22 +176,25 @@ export default function BankAccountsScreen() {
     }, []);
 
     const confirmDelete = useCallback(async () => {
-        if (!selectedAccount) return;
-        setSaveLoading(true);
+        if (!accountToDelete) return;
+        setDeleteModalVisible(false);
         const { error } = await supabase
             .from('bank_accounts')
             .delete()
-            .eq('id', selectedAccount.id);
+            .eq('id', accountToDelete.id);
         if (error) {
             console.error('Error deleting account:', error);
             alert('Erreur lors de la suppression');
         } else {
-            setDeleteModalVisible(false);
-            setSelectedAccount(null);
-            await fetchAccounts();
+            setAccounts(prevAccounts => prevAccounts.filter(a => a.id !== accountToDelete.id));
         }
-        setSaveLoading(false);
-    }, [selectedAccount, fetchAccounts]);
+        setAccountToDelete(null);
+    }, [accountToDelete]);
+
+    const cancelDelete = useCallback(() => {
+        setDeleteModalVisible(false);
+        setAccountToDelete(null);
+    }, []);
 
     const handleSaveNewAccount = useCallback(async () => {
         if (!formAccountName) {
@@ -247,17 +260,6 @@ export default function BankAccountsScreen() {
         setSaveLoading(false);
     }, [selectedAccount, formAccountType, formAccountName, formAccountNumber, formBankName, formBranchName, formRIB, formIBAN, formSwiftCode, formCurrency, formOpeningBalance, formCurrentBalance, formIsActive, formNote, fetchAccounts]);
 
-    const tableColumns = [
-        { key: 'account_name', label: 'Nom du compte', width: 200 },
-        { key: 'account_type', label: 'Type', width: 120 },
-        { key: 'bank_name', label: 'Banque', width: 180 },
-        { key: 'account_number', label: 'Numéro', width: 150 },
-        { key: 'current_balance', label: 'Solde', width: 150, align: 'right' },
-        { key: 'currency', label: 'Devise', width: 80 },
-        { key: 'is_active', label: 'Statut', width: 100 },
-        { key: 'actions', label: 'Actions', width: 150 },
-    ];
-
     const getAccountTypeLabel = (type) => {
         const types = {
             bank: 'Banque',
@@ -267,25 +269,72 @@ export default function BankAccountsScreen() {
         return types[type] || type;
     };
 
-    const renderTableRow = (item) => ({
-        account_name: item.account_name || '-',
-        account_type: getAccountTypeLabel(item.account_type),
-        bank_name: item.bank_name || '-',
-        account_number: item.account_number || '-',
-        current_balance: `${parseFloat(item.current_balance || 0).toFixed(3)}`,
-        currency: item.currency || 'TND',
-        is_active: <ModernStatusBadge label={item.is_active ? 'Actif' : 'Inactif'} variant={item.is_active ? 'success' : 'error'} />,
-        actions: (
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity onPress={() => handleEditAccount(item)} style={[localStyles.actionButton, { backgroundColor: tTheme.primary + '20' }]}>
-                    <Ionicons name="pencil" size={16} color={tTheme.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDeleteAccount(item)} style={[localStyles.actionButton, { backgroundColor: '#ff444420' }]}>
-                    <Ionicons name="trash" size={16} color="#ff4444" />
-                </TouchableOpacity>
-            </View>
-        ),
-    });
+    const tableColumns = [
+        { 
+            key: 'account_name', 
+            label: 'Nom du compte', 
+            flex: 1.5,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.account_name || '-'}</Text>
+        },
+        { 
+            key: 'account_type', 
+            label: 'Type', 
+            flex: 1,
+            render: (item) => <Text style={{ color: tTheme.text }}>{getAccountTypeLabel(item.account_type)}</Text>
+        },
+        { 
+            key: 'bank_name', 
+            label: 'Banque', 
+            flex: 1.5,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.bank_name || '-'}</Text>
+        },
+        { 
+            key: 'account_number', 
+            label: 'Numéro', 
+            flex: 1.2,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.account_number || '-'}</Text>
+        },
+        { 
+            key: 'current_balance', 
+            label: 'Solde', 
+            flex: 1,
+            render: (item) => <Text style={{ color: tTheme.text, textAlign: 'right' }}>{parseFloat(item.current_balance || 0).toFixed(3)}</Text>
+        },
+        { 
+            key: 'currency', 
+            label: 'Devise', 
+            flex: 0.6,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.currency || 'TND'}</Text>
+        },
+        { 
+            key: 'is_active', 
+            label: 'Statut', 
+            flex: 0.8,
+            render: (item) => <ModernStatusBadge label={item.is_active ? 'Actif' : 'Inactif'} variant={item.is_active ? 'success' : 'error'} />
+        },
+        { 
+            key: 'actions', 
+            label: 'Actions', 
+            flex: 1,
+            render: (item) => (
+                <View style={localStyles.actionsContainer}>
+                    <TouchableOpacity
+                        style={[localStyles.actionButton, { backgroundColor: tTheme.primary + '15' }]}
+                        onPress={(e) => { e.stopPropagation(); printFinanceDocument(item, 'bank_account', companyInfo); }}
+                    >
+                        <Ionicons name="print-outline" size={18} color={tTheme.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        activeOpacity={0.7}
+                        style={[localStyles.deleteButton, { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]}
+                        onPress={(e) => { e.stopPropagation(); setAccountToDelete(item); setDeleteModalVisible(true); }}
+                    >
+                        <Ionicons name="trash" size={18} color="#DC2626" />
+                    </TouchableOpacity>
+                </View>
+            )
+        },
+    ];
 
     const renderForm = () => (
         <ScrollView style={{ maxHeight: 500 }}>
@@ -452,7 +501,6 @@ export default function BankAccountsScreen() {
             <ModernTable
                 columns={tableColumns}
                 data={filteredAccounts}
-                renderRow={renderTableRow}
                 loading={loading}
                 emptyMessage="Aucun compte trouvé"
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -504,21 +552,32 @@ export default function BankAccountsScreen() {
                 </View>
             </Modal>
 
-            {/* Delete Modal */}
-            <Modal visible={deleteModalVisible} animationType="fade" transparent={true} onRequestClose={() => setDeleteModalVisible(false)}>
-                <View style={[styles.overlay, { backgroundColor: tTheme.overlay }]}>
-                    <View style={[localStyles.deleteModal, { backgroundColor: tTheme.card, ...tTheme.shadow.large }]}>
-                        <Ionicons name="warning" size={48} color="#ff4444" />
-                        <Text style={[localStyles.deleteTitle, { color: tTheme.text }]}>Confirmer la suppression</Text>
-                        <Text style={[localStyles.deleteMessage, { color: tTheme.textSecondary }]}>
-                            Êtes-vous sûr de vouloir supprimer ce compte ? Cette action est irréversible.
+            {/* Delete Confirmation Modal */}
+            <Modal visible={deleteModalVisible} animationType="fade" transparent={true} onRequestClose={cancelDelete}>
+                <View style={localStyles.modalOverlay}>
+                    <View style={[localStyles.deleteModalContainer, { backgroundColor: tTheme.card, ...tTheme.shadow.large }]}>
+                        <View style={localStyles.modalIconContainer}>
+                            <Ionicons name="warning" size={48} color="#DC2626" />
+                        </View>
+                        <Text style={[localStyles.deleteModalTitle, { color: tTheme.text }]}>Confirmer la suppression</Text>
+                        <Text style={[localStyles.modalMessage, { color: tTheme.textSecondary }]}>
+                            Êtes-vous sûr de vouloir supprimer le compte{' '}
+                            <Text style={{ fontWeight: '700', color: tTheme.text }}>{accountToDelete?.account_number}</Text> ?{' '}
+                            Cette action est irréversible.
                         </Text>
-                        <View style={localStyles.deleteActions}>
-                            <TouchableOpacity style={[styles.secondaryButton, { flex: 1, borderColor: tTheme.border }]} onPress={() => setDeleteModalVisible(false)}>
-                                <Text style={[styles.primaryButtonText, { color: tTheme.text }]}>Annuler</Text>
+                        <View style={localStyles.modalButtons}>
+                            <TouchableOpacity
+                                style={[localStyles.modalButton, localStyles.cancelButton, { borderColor: tTheme.border }]}
+                                onPress={cancelDelete}
+                            >
+                                <Text style={[localStyles.modalButtonText, { color: tTheme.text }]}>Annuler</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={[styles.primaryButton, { flex: 1, backgroundColor: '#ff4444' }]} onPress={confirmDelete} disabled={saveLoading}>
-                                <Text style={styles.primaryButtonText}>{saveLoading ? 'Suppression...' : 'Supprimer'}</Text>
+                            <TouchableOpacity
+                                style={[localStyles.modalButton, { backgroundColor: '#DC2626' }]}
+                                onPress={confirmDelete}
+                            >
+                                <Ionicons name="trash" size={18} color="#FFF" style={{ marginRight: 8 }} />
+                                <Text style={[localStyles.modalButtonText, { color: '#FFF' }]}>Supprimer</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -531,7 +590,9 @@ export default function BankAccountsScreen() {
 const localStyles = StyleSheet.create({
     filtersContainer: { padding: 16, marginBottom: 16, borderRadius: 16, marginHorizontal: 16, marginTop: 16 },
     filterChips: { marginTop: 12 },
-    actionButton: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    actionsContainer: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+    actionButton: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    deleteButton: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, shadowColor: '#DC2626', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 },
     modalContent: { width: '90%', maxWidth: 700, maxHeight: '90%', borderRadius: 24, overflow: 'hidden' },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#eee' },
     modalTitle: { fontSize: 20, fontWeight: '700' },
@@ -542,8 +603,13 @@ const localStyles = StyleSheet.create({
     typeButtonText: { fontSize: 14, fontWeight: '600' },
     checkboxContainer: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 8, borderWidth: 1, marginBottom: 16 },
     checkboxLabel: { fontSize: 15, fontWeight: '500' },
-    deleteModal: { width: '90%', maxWidth: 400, borderRadius: 24, padding: 24, alignItems: 'center' },
-    deleteTitle: { fontSize: 20, fontWeight: '700', marginTop: 16, marginBottom: 8 },
-    deleteMessage: { fontSize: 14, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
-    deleteActions: { flexDirection: 'row', gap: 12, width: '100%' },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
+    deleteModalContainer: { width: '90%', maxWidth: 400, borderRadius: 24, padding: 32, alignItems: 'center' },
+    modalIconContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+    deleteModalTitle: { fontSize: 22, fontWeight: '700', marginBottom: 12, textAlign: 'center' },
+    modalMessage: { fontSize: 15, textAlign: 'center', marginBottom: 28, lineHeight: 22 },
+    modalButtons: { flexDirection: 'row', gap: 12, width: '100%' },
+    modalButton: { flex: 1, flexDirection: 'row', paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    cancelButton: { backgroundColor: 'transparent', borderWidth: 1.5 },
+    modalButtonText: { fontSize: 16, fontWeight: '600' },
 });

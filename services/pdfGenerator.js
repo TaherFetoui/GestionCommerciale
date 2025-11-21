@@ -1252,3 +1252,387 @@ export const printPurchaseOrderWeb = (order, supplier, companyInfo) => {
 export const downloadPurchaseOrderPDFWeb = (order, supplier, companyInfo) => {
     printPurchaseOrderWeb(order, supplier, companyInfo);
 };
+
+// Tax Withholding Certificate Print Function (Retenue à la source)
+export const printTaxWithholdingCertificate = (documentData, isClient, companyInfo = {}) => {
+    const formatDate = (date) => {
+        if (!date) return '-';
+        const d = new Date(date);
+        return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
+
+    const formatAmount = (amount) => {
+        return parseFloat(amount || 0).toFixed(3);
+    };
+
+    const getCurrentYear = () => new Date().getFullYear();
+    
+    const entityName = isClient ? documentData.client : documentData.supplier;
+    const retentionRate = parseFloat(documentData.retention_rate || 1.5).toFixed(2);
+    const invoiceAmount = parseFloat(documentData.invoice_amount || 0);
+    const retentionAmount = parseFloat(documentData.retention_amount || 0);
+    const netAmount = invoiceAmount - retentionAmount;
+
+    const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Certificat de Retenue d'Impôt</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                @page { 
+                    size: A4;
+                    margin: 15mm;
+                }
+                body { 
+                    font-family: 'Arial', sans-serif; 
+                    font-size: 9pt;
+                    line-height: 1.2;
+                    color: #000;
+                    max-width: 210mm;
+                    margin: 0 auto;
+                }
+                .header {
+                    text-align: center;
+                    margin-bottom: 15px;
+                    padding-bottom: 8px;
+                    border-bottom: 2px solid #000;
+                }
+                .header-title {
+                    font-size: 8pt;
+                    font-weight: bold;
+                    text-transform: uppercase;
+                    margin-bottom: 2px;
+                }
+                .reference {
+                    text-align: right;
+                    margin-bottom: 10px;
+                    font-size: 8pt;
+                    line-height: 1.3;
+                }
+                .section {
+                    margin: 8px 0;
+                    border: 1.5px solid #000;
+                    padding: 8px;
+                }
+                .section-title {
+                    font-weight: bold;
+                    margin-bottom: 6px;
+                    background-color: #f0f0f0;
+                    padding: 4px 8px;
+                    border: 1px solid #000;
+                    font-size: 8pt;
+                }
+                .info-row {
+                    display: flex;
+                    margin: 3px 0;
+                    padding: 2px 0;
+                    font-size: 8pt;
+                }
+                .info-label {
+                    font-weight: bold;
+                    min-width: 180px;
+                }
+                .info-value {
+                    flex: 1;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 8px 0;
+                }
+                table th, table td {
+                    border: 1.5px solid #000;
+                    padding: 4px 6px;
+                    text-align: center;
+                    font-size: 8pt;
+                }
+                table th {
+                    background-color: #f0f0f0;
+                    font-weight: bold;
+                }
+                .amount-cell {
+                    text-align: right;
+                    font-weight: bold;
+                }
+                .total-row {
+                    background-color: #f8f8f8;
+                    font-weight: bold;
+                }
+                .footer-text {
+                    text-align: center;
+                    font-size: 7pt;
+                    font-style: italic;
+                    margin: 10px 0;
+                    line-height: 1.4;
+                }
+                .signature-section {
+                    margin-top: 15px;
+                    text-align: right;
+                }
+                .signature-line {
+                    font-size: 8pt;
+                    margin-top: 5px;
+                }
+                .footer-note {
+                    font-size: 6pt;
+                    margin-top: 15px;
+                    padding-top: 8px;
+                    border-top: 1px solid #ccc;
+                    color: #666;
+                    line-height: 1.3;
+                }
+                @media print {
+                    body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+                    .section { page-break-inside: avoid; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <div class="header-title">RÉPUBLIQUE TUNISIENNE</div>
+                <div class="header-title">MINISTÈRE DES FINANCES</div>
+                <div style="margin-top: 15px; font-size: 10pt; font-weight: bold;">
+                    CERTIFICAT DE RETENUE D'IMPÔT<br>
+                    SUR LE REVENU OU<br>
+                    D'IMPÔT SUR LES SOCIÉTÉS
+                </div>
+            </div>
+
+            <div style="text-align: center; font-size: 8pt; margin-bottom: 8px;">
+                ${companyInfo.tax_office || 'DIRECTION GÉNÉRALE DU CONTRÔLE FISCAL'}
+            </div>
+
+            <div class="reference">
+                <strong>Retenue Effective le:</strong> ${formatDate(documentData.retention_date)}<br>
+                <strong>Fact Client-FA:</strong> ${documentData.invoice_number || '-'}
+            </div>
+
+            <!-- Section A: Payeur -->
+            <div class="section">
+                <div class="section-title">A - PERSONNE OU ORGANISME PAYEUR:</div>
+                <div class="info-row">
+                    <div class="info-label">Dénomination de la personne ou de l'organisme payeur:</div>
+                    <div class="info-value">${companyInfo.name || '-'}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Adresse:</div>
+                    <div class="info-value">${companyInfo.address || '-'}</div>
+                </div>
+                <div style="margin-top: 8px;">
+                    <table style="margin: 0;">
+                        <tr>
+                            <th style="width: 50%;">IDENTIFIANT</th>
+                            <th style="width: 50%;"></th>
+                        </tr>
+                        <tr>
+                            <td><strong>Matricule Fiscal</strong></td>
+                            <td>${companyInfo.tax_id || '-'}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Section B: Retenues effectuées -->
+            <div class="section">
+                <div class="section-title">B - RETENUES EFFECTUÉES SUR</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 40%;"></th>
+                            <th style="width: 20%;">MONTANT BRUT</th>
+                            <th style="width: 20%;">RETENUE</th>
+                            <th style="width: 20%;">MONTANT NET</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="text-align: left; padding-left: 8px;"><strong>RETENUE À SOURCE SUR MARCHÉ ${retentionRate}%</strong></td>
+                            <td class="amount-cell">${formatAmount(invoiceAmount)}</td>
+                            <td class="amount-cell">${formatAmount(retentionAmount)}</td>
+                            <td class="amount-cell">${formatAmount(netAmount)}</td>
+                        </tr>
+                        <tr class="total-row">
+                            <td style="text-align: right; padding-right: 8px;"><strong>Total Général</strong></td>
+                            <td class="amount-cell">${formatAmount(invoiceAmount)}</td>
+                            <td class="amount-cell">${formatAmount(retentionAmount)}</td>
+                            <td class="amount-cell">${formatAmount(netAmount)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Section C: Bénéficiaire -->
+            <div class="section">
+                <div class="section-title">C - BÉNÉFICIAIRE</div>
+                <div class="info-row">
+                    <div class="info-label">N° de la carte d'identité<br>ou séjour pour les étrangers</div>
+                    <div class="info-value" style="border: 1px solid #000; padding: 2px 8px; min-height: 20px;">${documentData.id_number || ''}</div>
+                    <div class="info-label" style="margin-left: 20px;">IDENTIFIANT</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label"></div>
+                    <div class="info-value"></div>
+                    <div class="info-label" style="margin-left: 20px;"><strong>Matricule Fiscal</strong></div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label"></div>
+                    <div class="info-value"></div>
+                    <div class="info-value" style="border: 1px solid #000; padding: 2px 8px; margin-left: 20px; min-height: 20px;">${documentData.tax_id || '-'}</div>
+                </div>
+                <div class="info-row" style="margin-top: 8px;">
+                    <div class="info-label">Nom, Prénom ou raison sociale:</div>
+                    <div class="info-value">${entityName || '-'}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Adresse professionnelle:</div>
+                    <div class="info-value">${documentData.address || '-'}</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Adresse de résidence:</div>
+                    <div class="info-value">${documentData.address || '-'}</div>
+                </div>
+            </div>
+
+            <div class="footer-text">
+                Je soussigné, certifie exacts les renseignements figurant sur le présent<br>
+                certificat et m'engage aux sanctions prévues par la loi pour toute inexactitude.
+            </div>
+
+            <div class="signature-section">
+                <div class="signature-line">
+                    À ${companyInfo.city || 'SFAX'}, le ${formatDate(new Date())}
+                </div>
+                <div class="signature-line" style="margin-top: 20px;">
+                    <strong>Cachet et signature du payeur</strong>
+                </div>
+            </div>
+
+            <div class="footer-note">
+                (1) Le certificat est délivré à l'occasion de chaque paiement. Toutefois, pour les opérations répétitives, le certificat peut être délivré mensuellement ou trimestriellement.<br>
+                (2) En cas de déclaration au montant global, joindre la liste du détail des paiements (nom, prénom, adresse et montant payé): les règles de publicité prévues par la loi)<br>
+                à l'égard du revenu ou sur les sociétés (pénalisations et établissements publics): E. établissements secondaires.
+            </div>
+        </body>
+        </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+        printWindow.print();
+    }, 250);
+};
+
+// Generic Finance Document Print Function
+export const printFinanceDocument = (documentData, documentType, companyInfo = {}) => {
+    // Check if it's a tax withholding certificate
+    if (documentType === 'client_return' || documentType === 'supplier_return') {
+        return printTaxWithholdingCertificate(documentData, documentType === 'client_return', companyInfo);
+    }
+
+    const formatDate = (date) => {
+        if (!date) return '-';
+        const d = new Date(date);
+        return d.toLocaleDateString('fr-FR');
+    };
+
+    const formatAmount = (amount) => {
+        return parseFloat(amount || 0).toFixed(3);
+    };
+
+    const getDocumentTitle = (type) => {
+        const titles = {
+            check: 'Chèque',
+            payment_slip: 'Bordereau de Versement',
+            client_payment: 'Ordre d\'Encaissement Client',
+            supplier_payment: 'Ordre de Paiement Fournisseur',
+            fiscal_year: 'Exercice Fiscal',
+            bank_account: 'Compte Bancaire'
+        };
+        return titles[type] || 'Document Financier';
+    };
+
+    const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>${getDocumentTitle(documentType)}</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #333; }
+                .container { max-width: 800px; margin: 0 auto; }
+                .header { text-align: center; margin-bottom: 40px; border-bottom: 3px solid #6366f1; padding-bottom: 20px; }
+                .company-name { font-size: 24px; font-weight: bold; color: #6366f1; margin-bottom: 10px; }
+                .company-info { font-size: 12px; color: #666; line-height: 1.6; }
+                .doc-title { font-size: 28px; font-weight: bold; color: #1f2937; margin: 30px 0; text-align: center; }
+                .doc-info { background: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0; }
+                .info-row { display: flex; padding: 10px 0; border-bottom: 1px solid #e5e7eb; }
+                .info-row:last-child { border-bottom: none; }
+                .info-label { font-weight: 600; color: #6366f1; min-width: 200px; }
+                .info-value { color: #1f2937; flex: 1; }
+                .footer { margin-top: 50px; text-align: center; font-size: 11px; color: #999; border-top: 1px solid #e5e7eb; padding-top: 20px; }
+                .signature-section { margin-top: 60px; display: flex; justify-content: space-between; }
+                .signature-box { width: 200px; text-align: center; border-top: 1px solid #333; padding-top: 10px; }
+                @media print { body { padding: 20px; } }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <div class="company-name">${companyInfo.name || 'Entreprise'}</div>
+                    <div class="company-info">
+                        ${companyInfo.address || ''}<br>
+                        ${companyInfo.phone ? 'Tél: ' + companyInfo.phone : ''} ${companyInfo.email ? '• Email: ' + companyInfo.email : ''}<br>
+                        ${companyInfo.tax_id ? 'MF: ' + companyInfo.tax_id : ''}
+                    </div>
+                </div>
+
+                <div class="doc-title">${getDocumentTitle(documentType)}</div>
+
+                <div class="doc-info">
+                    ${Object.entries(documentData).map(([key, value]) => {
+                        if (key === 'id' || key === 'created_at' || key === 'updated_at' || key === 'created_by' || key === 'user_id') return '';
+                        const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                        let displayValue = value;
+                        
+                        if (key.includes('date')) displayValue = formatDate(value);
+                        else if (key.includes('amount') || key.includes('balance')) displayValue = formatAmount(value) + ' TND';
+                        else if (key === 'status') displayValue = value?.replace(/_/g, ' ').toUpperCase();
+                        else if (typeof value === 'boolean') displayValue = value ? 'Oui' : 'Non';
+                        else if (value === null || value === undefined) displayValue = '-';
+                        
+                        return `
+                            <div class="info-row">
+                                <div class="info-label">${label}</div>
+                                <div class="info-value">${displayValue}</div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+
+                <div class="signature-section">
+                    <div class="signature-box">Préparé par</div>
+                    <div class="signature-box">Approuvé par</div>
+                </div>
+
+                <div class="footer">
+                    Document généré le ${formatDate(new Date())} - ${companyInfo.name || 'Gestion Commerciale'}
+                </div>
+            </div>
+        </body>
+        </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+        printWindow.print();
+    }, 250);
+};

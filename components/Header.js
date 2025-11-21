@@ -171,7 +171,7 @@ export default function Header({ title, navigation, onToggleSidebar, rightAction
                                 }]}>
                                     <View style={[styles.notifHeader, { borderBottomColor: tTheme.border }]}>
                                         <Text style={[styles.notifTitle, { color: tTheme.text }]}>
-                                            Activités récentes
+                                            Notifications
                                         </Text>
                                         <Ionicons name="time-outline" size={18} color={tTheme.primary} />
                                     </View>

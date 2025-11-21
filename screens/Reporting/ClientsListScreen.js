@@ -89,18 +89,6 @@ export default function ClientsListScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: tTheme.background }]}>
-            <View style={[localStyles.header, { backgroundColor: tTheme.cardBackground }]}>
-                <View style={localStyles.titleContainer}>
-                    <Ionicons name="people-outline" size={32} color={tTheme.primary} />
-                    <Text style={[localStyles.title, { color: tTheme.text }]}>
-                        Reporting Clients
-                    </Text>
-                </View>
-                <Text style={[localStyles.subtitle, { color: tTheme.textSecondary }]}>
-                    Sélectionnez un client pour voir ses transactions
-                </Text>
-            </View>
-
             <View style={localStyles.searchContainer}>
                 <Ionicons name="search-outline" size={20} color={tTheme.textSecondary} />
                 <TextInput

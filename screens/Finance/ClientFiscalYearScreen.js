@@ -3,16 +3,17 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useCallback, useLayoutEffect, useState } from 'react';
 import { Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { ModernActionButton, ModernFilterChip, ModernSearchBar, ModernStatusBadge, ModernTable } from '../../components/ModernUIComponents';
-import { themes } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { getGlobalStyles } from '../../styles/GlobalStyles';
+import { printFinanceDocument } from '../../services/pdfGenerator';
+import { getGlobalStyles, themes } from '../../styles/GlobalStyles';
 
 export default function ClientFiscalYearScreen() {
     const navigation = useNavigation();
     const [fiscalYears, setFiscalYears] = useState([]);
     const [filteredYears, setFilteredYears] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [companyInfo, setCompanyInfo] = useState({});
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -20,6 +21,7 @@ export default function ClientFiscalYearScreen() {
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [selectedYear, setSelectedYear] = useState(null);
+    const [yearToDelete, setYearToDelete] = useState(null);
 
     const [formYearName, setFormYearName] = useState('');
     const [formStartDate, setFormStartDate] = useState('');
@@ -33,6 +35,13 @@ export default function ClientFiscalYearScreen() {
     const styles = getGlobalStyles(theme);
 
     useLayoutEffect(() => {
+        const fetchCompanyInfo = async () => {
+            if (!user?.id) return;
+            const { data } = await supabase.from('company_info').select('*').eq('user_id', user.id).single();
+            if (data) setCompanyInfo(data);
+        };
+        fetchCompanyInfo();
+
         navigation.setOptions({
             headerRight: () => (
                 <View style={{ flexDirection: 'row', gap: 12, marginRight: 8 }}>
@@ -89,13 +98,13 @@ export default function ClientFiscalYearScreen() {
     const handleDeleteYear = useCallback((item) => { setSelectedYear(item); setDeleteModalVisible(true); }, []);
 
     const confirmDelete = useCallback(async () => {
-        if (!selectedYear) return;
+        if (!yearToDelete) return;
         setSaveLoading(true);
-        const { error } = await supabase.from('fiscal_years').delete().eq('id', selectedYear.id);
+        const { error } = await supabase.from('fiscal_years').delete().eq('id', yearToDelete.id);
         if (error) alert('Erreur');
-        else { setDeleteModalVisible(false); setSelectedYear(null); await fetchYears(); }
+        else { setDeleteModalVisible(false); setYearToDelete(null); await fetchYears(); }
         setSaveLoading(false);
-    }, [selectedYear, fetchYears]);
+    }, [yearToDelete, fetchYears]);
 
     const handleSaveNewYear = useCallback(async () => {
         if (!formYearName || !formStartDate || !formEndDate) { alert('Champs obligatoires manquants'); return; }
@@ -129,29 +138,57 @@ export default function ClientFiscalYearScreen() {
         setSaveLoading(false);
     }, [selectedYear, formYearName, formStartDate, formEndDate, formStatus, formNote, fetchYears]);
 
-    const tableColumns = [
-        { key: 'year_name', label: 'Exercice', width: 150 },
-        { key: 'start_date', label: 'Début', width: 150 },
-        { key: 'end_date', label: 'Fin', width: 150 },
-        { key: 'status', label: 'Statut', width: 120 },
-        { key: 'actions', label: 'Actions', width: 150 },
-    ];
-
     const getStatusVariant = (status) => ({ open: 'success', closed: 'warning', locked: 'error' }[status] || 'default');
     const getStatusLabel = (status) => ({ open: 'Ouvert', closed: 'Fermé', locked: 'Verrouillé' }[status] || status);
 
-    const renderTableRow = (item) => ({
-        year_name: item.year_name || '-',
-        start_date: item.start_date || '-',
-        end_date: item.end_date || '-',
-        status: <ModernStatusBadge label={getStatusLabel(item.status)} variant={getStatusVariant(item.status)} />,
-        actions: (
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity onPress={() => handleEditYear(item)} style={[localStyles.actionButton, { backgroundColor: tTheme.primary + '20' }]}><Ionicons name="pencil" size={16} color={tTheme.primary} /></TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDeleteYear(item)} style={[localStyles.actionButton, { backgroundColor: '#ff444420' }]}><Ionicons name="trash" size={16} color="#ff4444" /></TouchableOpacity>
-            </View>
-        ),
-    });
+    const tableColumns = [
+        { 
+            key: 'year_name', 
+            label: 'Exercice', 
+            flex: 1.2,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.year_name || '-'}</Text>
+        },
+        { 
+            key: 'start_date', 
+            label: 'Début', 
+            flex: 1.2,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.start_date || '-'}</Text>
+        },
+        { 
+            key: 'end_date', 
+            label: 'Fin', 
+            flex: 1.2,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.end_date || '-'}</Text>
+        },
+        { 
+            key: 'status', 
+            label: 'Statut', 
+            flex: 1,
+            render: (item) => <ModernStatusBadge label={getStatusLabel(item.status)} variant={getStatusVariant(item.status)} />
+        },
+        { 
+            key: 'actions', 
+            label: 'Actions', 
+            flex: 1,
+            render: (item) => (
+                <View style={localStyles.actionsContainer}>
+                    <TouchableOpacity
+                        style={[localStyles.actionButton, { backgroundColor: tTheme.primary + '15' }]}
+                        onPress={(e) => { e.stopPropagation(); printFinanceDocument(item, 'fiscal_year', companyInfo); }}
+                    >
+                        <Ionicons name="print-outline" size={18} color={tTheme.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        activeOpacity={0.7}
+                        style={[localStyles.deleteButton, { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]}
+                        onPress={(e) => { e.stopPropagation(); setYearToDelete(item); setDeleteModalVisible(true); }}
+                    >
+                        <Ionicons name="trash" size={18} color="#DC2626" />
+                    </TouchableOpacity>
+                </View>
+            )
+        },
+    ];
 
     const renderForm = () => (
         <ScrollView style={{ maxHeight: 500 }}>
@@ -185,7 +222,7 @@ export default function ClientFiscalYearScreen() {
                     <ModernFilterChip label="Verrouillé" active={statusFilter === 'locked'} onPress={() => handleStatusFilter('locked')} />
                 </ScrollView>
             </View>
-            <ModernTable columns={tableColumns} data={filteredYears} renderRow={renderTableRow} loading={loading} emptyMessage="Aucun exercice trouvé" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} />
+            <ModernTable columns={tableColumns} data={filteredYears} loading={loading} emptyMessage="Aucun exercice trouvé" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} />
             <Modal visible={createModalVisible} animationType="slide" transparent={true} onRequestClose={() => setCreateModalVisible(false)}>
                 <View style={[styles.overlay, { backgroundColor: tTheme.overlay }]}>
                     <View style={[localStyles.modalContent, { backgroundColor: tTheme.card, ...tTheme.shadow.large }]}>
@@ -210,15 +247,30 @@ export default function ClientFiscalYearScreen() {
                     </View>
                 </View>
             </Modal>
-            <Modal visible={deleteModalVisible} animationType="fade" transparent={true} onRequestClose={() => setDeleteModalVisible(false)}>
+            <Modal visible={deleteModalVisible} animationType="fade" transparent={true} onRequestClose={() => { setDeleteModalVisible(false); setYearToDelete(null); }}>
                 <View style={[styles.overlay, { backgroundColor: tTheme.overlay }]}>
                     <View style={[localStyles.deleteModal, { backgroundColor: tTheme.card, ...tTheme.shadow.large }]}>
-                        <Ionicons name="warning" size={48} color="#ff4444" />
+                        <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                            <Ionicons name="warning" size={56} color="#DC2626" />
+                        </View>
                         <Text style={[localStyles.deleteTitle, { color: tTheme.text }]}>Confirmer la suppression</Text>
-                        <Text style={[localStyles.deleteMessage, { color: tTheme.textSecondary }]}>Supprimer cet exercice fiscal ?</Text>
+                        <Text style={[localStyles.deleteMessage, { color: tTheme.textSecondary }]}>
+                            Êtes-vous sûr de vouloir supprimer l'exercice fiscal "{yearToDelete?.year_name}" ?
+                        </Text>
                         <View style={localStyles.deleteActions}>
-                            <TouchableOpacity style={[styles.secondaryButton, { flex: 1, borderColor: tTheme.border }]} onPress={() => setDeleteModalVisible(false)}><Text style={[styles.primaryButtonText, { color: tTheme.text }]}>Annuler</Text></TouchableOpacity>
-                            <TouchableOpacity style={[styles.primaryButton, { flex: 1, backgroundColor: '#ff4444' }]} onPress={confirmDelete} disabled={saveLoading}><Text style={styles.primaryButtonText}>{saveLoading ? 'Suppression...' : 'Supprimer'}</Text></TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[styles.secondaryButton, { flex: 1, borderColor: tTheme.border }]} 
+                                onPress={() => { setDeleteModalVisible(false); setYearToDelete(null); }}
+                            >
+                                <Text style={[styles.primaryButtonText, { color: tTheme.text }]}>Annuler</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[styles.primaryButton, { flex: 1, backgroundColor: '#DC2626' }]} 
+                                onPress={confirmDelete} 
+                                disabled={saveLoading}
+                            >
+                                <Text style={styles.primaryButtonText}>{saveLoading ? 'Suppression...' : 'Supprimer'}</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
                 </View>
@@ -230,7 +282,9 @@ export default function ClientFiscalYearScreen() {
 const localStyles = StyleSheet.create({
     filtersContainer: { padding: 16, marginBottom: 16, borderRadius: 16, marginHorizontal: 16, marginTop: 16 },
     filterChips: { marginTop: 12 },
-    actionButton: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    actionsContainer: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+    actionButton: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    deleteButton: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
     modalContent: { width: '90%', maxWidth: 600, maxHeight: '90%', borderRadius: 24, overflow: 'hidden' },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#eee' },
     modalTitle: { fontSize: 20, fontWeight: '700' },

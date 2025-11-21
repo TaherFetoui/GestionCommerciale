@@ -3,16 +3,17 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useCallback, useLayoutEffect, useState } from 'react';
 import { Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { ModernActionButton, ModernFilterChip, ModernSearchBar, ModernStatusBadge, ModernTable } from '../../components/ModernUIComponents';
-import { themes } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { getGlobalStyles } from '../../styles/GlobalStyles';
+import { printFinanceDocument } from '../../services/pdfGenerator';
+import { getGlobalStyles, themes } from '../../styles/GlobalStyles';
 
 export default function PaymentSlipsScreen() {
     const navigation = useNavigation();
     const [slips, setSlips] = useState([]);
     const [filteredSlips, setFilteredSlips] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [companyInfo, setCompanyInfo] = useState({});
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -20,6 +21,7 @@ export default function PaymentSlipsScreen() {
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [selectedSlip, setSelectedSlip] = useState(null);
+    const [slipToDelete, setSlipToDelete] = useState(null);
 
     const [formSlipNumber, setFormSlipNumber] = useState('');
     const [formSlipType, setFormSlipType] = useState('checks');
@@ -35,6 +37,13 @@ export default function PaymentSlipsScreen() {
     const styles = getGlobalStyles(theme);
 
     useLayoutEffect(() => {
+        const fetchCompanyInfo = async () => {
+            if (!user?.id) return;
+            const { data } = await supabase.from('company_info').select('*').eq('user_id', user.id).single();
+            if (data) setCompanyInfo(data);
+        };
+        fetchCompanyInfo();
+
         navigation.setOptions({
             headerRight: () => (
                 <View style={{ flexDirection: 'row', gap: 12, marginRight: 8 }}>
@@ -94,13 +103,21 @@ export default function PaymentSlipsScreen() {
     const handleDeleteSlip = useCallback((item) => { setSelectedSlip(item); setDeleteModalVisible(true); }, []);
 
     const confirmDelete = useCallback(async () => {
-        if (!selectedSlip) return;
-        setSaveLoading(true);
-        const { error } = await supabase.from('payment_slips').delete().eq('id', selectedSlip.id);
-        if (error) alert('Erreur');
-        else { setDeleteModalVisible(false); setSelectedSlip(null); await fetchSlips(); }
-        setSaveLoading(false);
-    }, [selectedSlip, fetchSlips]);
+        if (!slipToDelete) return;
+        setDeleteModalVisible(false);
+        const { error } = await supabase.from('payment_slips').delete().eq('id', slipToDelete.id);
+        if (error) {
+            alert('Erreur lors de la suppression');
+        } else {
+            setSlips(prevSlips => prevSlips.filter(s => s.id !== slipToDelete.id));
+        }
+        setSlipToDelete(null);
+    }, [slipToDelete]);
+
+    const cancelDelete = useCallback(() => {
+        setDeleteModalVisible(false);
+        setSlipToDelete(null);
+    }, []);
 
     const handleSaveNewSlip = useCallback(async () => {
         if (!formBankAccount || !formTotalAmount) { alert('Champs obligatoires manquants'); return; }
@@ -137,34 +154,70 @@ export default function PaymentSlipsScreen() {
         setSaveLoading(false);
     }, [selectedSlip, formSlipNumber, formSlipType, formBankAccount, formTotalAmount, formDepositDate, formStatus, formNote, fetchSlips]);
 
-    const tableColumns = [
-        { key: 'slip_number', label: 'N° Bordereau', width: 150 },
-        { key: 'slip_type', label: 'Type', width: 120 },
-        { key: 'bank_account', label: 'Compte bancaire', width: 180 },
-        { key: 'total_amount', label: 'Montant total', width: 140, align: 'right' },
-        { key: 'deposit_date', label: 'Date dépôt', width: 120 },
-        { key: 'status', label: 'Statut', width: 120 },
-        { key: 'actions', label: 'Actions', width: 150 },
-    ];
-
     const getStatusVariant = (status) => ({ draft: 'default', submitted: 'warning', processed: 'success', rejected: 'error' }[status] || 'default');
     const getStatusLabel = (status) => ({ draft: 'Brouillon', submitted: 'Soumis', processed: 'Traité', rejected: 'Rejeté' }[status] || status);
     const getSlipTypeLabel = (type) => ({ checks: 'Chèques', cash: 'Espèces', mixed: 'Mixte' }[type] || type);
 
-    const renderTableRow = (item) => ({
-        slip_number: item.slip_number || '-',
-        slip_type: getSlipTypeLabel(item.slip_type),
-        bank_account: item.bank_account || '-',
-        total_amount: `${parseFloat(item.total_amount || 0).toFixed(3)} TND`,
-        deposit_date: item.deposit_date || '-',
-        status: <ModernStatusBadge label={getStatusLabel(item.status)} variant={getStatusVariant(item.status)} />,
-        actions: (
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity onPress={() => handleEditSlip(item)} style={[localStyles.actionButton, { backgroundColor: tTheme.primary + '20' }]}><Ionicons name="pencil" size={16} color={tTheme.primary} /></TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDeleteSlip(item)} style={[localStyles.actionButton, { backgroundColor: '#ff444420' }]}><Ionicons name="trash" size={16} color="#ff4444" /></TouchableOpacity>
-            </View>
-        ),
-    });
+    const tableColumns = [
+        { 
+            key: 'slip_number', 
+            label: 'N° Bordereau', 
+            flex: 1.2,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.slip_number || '-'}</Text>
+        },
+        { 
+            key: 'slip_type', 
+            label: 'Type', 
+            flex: 1,
+            render: (item) => <Text style={{ color: tTheme.text }}>{getSlipTypeLabel(item.slip_type)}</Text>
+        },
+        { 
+            key: 'bank_account', 
+            label: 'Compte bancaire', 
+            flex: 1.5,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.bank_account || '-'}</Text>
+        },
+        { 
+            key: 'total_amount', 
+            label: 'Montant total', 
+            flex: 1,
+            render: (item) => <Text style={{ color: tTheme.text, textAlign: 'right' }}>{parseFloat(item.total_amount || 0).toFixed(3)} TND</Text>
+        },
+        { 
+            key: 'deposit_date', 
+            label: 'Date dépôt', 
+            flex: 1,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.deposit_date || '-'}</Text>
+        },
+        { 
+            key: 'status', 
+            label: 'Statut', 
+            flex: 1,
+            render: (item) => <ModernStatusBadge label={getStatusLabel(item.status)} variant={getStatusVariant(item.status)} />
+        },
+        { 
+            key: 'actions', 
+            label: 'Actions', 
+            flex: 1,
+            render: (item) => (
+                <View style={localStyles.actionsContainer}>
+                    <TouchableOpacity
+                        style={[localStyles.actionButton, { backgroundColor: tTheme.primary + '15' }]}
+                        onPress={(e) => { e.stopPropagation(); printFinanceDocument(item, 'payment_slip', companyInfo); }}
+                    >
+                        <Ionicons name="print-outline" size={18} color={tTheme.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        activeOpacity={0.7}
+                        style={[localStyles.deleteButton, { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]}
+                        onPress={(e) => { e.stopPropagation(); setSlipToDelete(item); setDeleteModalVisible(true); }}
+                    >
+                        <Ionicons name="trash" size={18} color="#DC2626" />
+                    </TouchableOpacity>
+                </View>
+            )
+        },
+    ];
 
     const renderForm = () => (
         <ScrollView style={{ maxHeight: 500 }}>
@@ -208,7 +261,7 @@ export default function PaymentSlipsScreen() {
                     <ModernFilterChip label="Traité" active={statusFilter === 'processed'} onPress={() => handleStatusFilter('processed')} />
                 </ScrollView>
             </View>
-            <ModernTable columns={tableColumns} data={filteredSlips} renderRow={renderTableRow} loading={loading} emptyMessage="Aucun bordereau trouvé" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} />
+            <ModernTable columns={tableColumns} data={filteredSlips} loading={loading} emptyMessage="Aucun bordereau trouvé" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} />
             <Modal visible={createModalVisible} animationType="slide" transparent={true} onRequestClose={() => setCreateModalVisible(false)}>
                 <View style={[styles.overlay, { backgroundColor: tTheme.overlay }]}>
                     <View style={[localStyles.modalContent, { backgroundColor: tTheme.card, ...tTheme.shadow.large }]}>
@@ -233,15 +286,33 @@ export default function PaymentSlipsScreen() {
                     </View>
                 </View>
             </Modal>
-            <Modal visible={deleteModalVisible} animationType="fade" transparent={true} onRequestClose={() => setDeleteModalVisible(false)}>
-                <View style={[styles.overlay, { backgroundColor: tTheme.overlay }]}>
-                    <View style={[localStyles.deleteModal, { backgroundColor: tTheme.card, ...tTheme.shadow.large }]}>
-                        <Ionicons name="warning" size={48} color="#ff4444" />
-                        <Text style={[localStyles.deleteTitle, { color: tTheme.text }]}>Confirmer la suppression</Text>
-                        <Text style={[localStyles.deleteMessage, { color: tTheme.textSecondary }]}>Supprimer ce bordereau ?</Text>
-                        <View style={localStyles.deleteActions}>
-                            <TouchableOpacity style={[styles.secondaryButton, { flex: 1, borderColor: tTheme.border }]} onPress={() => setDeleteModalVisible(false)}><Text style={[styles.primaryButtonText, { color: tTheme.text }]}>Annuler</Text></TouchableOpacity>
-                            <TouchableOpacity style={[styles.primaryButton, { flex: 1, backgroundColor: '#ff4444' }]} onPress={confirmDelete} disabled={saveLoading}><Text style={styles.primaryButtonText}>{saveLoading ? 'Suppression...' : 'Supprimer'}</Text></TouchableOpacity>
+            {/* Delete Confirmation Modal */}
+            <Modal visible={deleteModalVisible} animationType="fade" transparent={true} onRequestClose={cancelDelete}>
+                <View style={localStyles.modalOverlay}>
+                    <View style={[localStyles.deleteModalContainer, { backgroundColor: tTheme.card, ...tTheme.shadow.large }]}>
+                        <View style={localStyles.modalIconContainer}>
+                            <Ionicons name="warning" size={48} color="#DC2626" />
+                        </View>
+                        <Text style={[localStyles.deleteModalTitle, { color: tTheme.text }]}>Confirmer la suppression</Text>
+                        <Text style={[localStyles.modalMessage, { color: tTheme.textSecondary }]}>
+                            Êtes-vous sûr de vouloir supprimer le bordereau{' '}
+                            <Text style={{ fontWeight: '700', color: tTheme.text }}>{slipToDelete?.slip_number}</Text> ?{' '}
+                            Cette action est irréversible.
+                        </Text>
+                        <View style={localStyles.modalButtons}>
+                            <TouchableOpacity
+                                style={[localStyles.modalButton, localStyles.cancelButton, { borderColor: tTheme.border }]}
+                                onPress={cancelDelete}
+                            >
+                                <Text style={[localStyles.modalButtonText, { color: tTheme.text }]}>Annuler</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[localStyles.modalButton, { backgroundColor: '#DC2626' }]}
+                                onPress={confirmDelete}
+                            >
+                                <Ionicons name="trash" size={18} color="#FFF" style={{ marginRight: 8 }} />
+                                <Text style={[localStyles.modalButtonText, { color: '#FFF' }]}>Supprimer</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
                 </View>
@@ -253,7 +324,9 @@ export default function PaymentSlipsScreen() {
 const localStyles = StyleSheet.create({
     filtersContainer: { padding: 16, marginBottom: 16, borderRadius: 16, marginHorizontal: 16, marginTop: 16 },
     filterChips: { marginTop: 12 },
-    actionButton: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    actionsContainer: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+    actionButton: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    deleteButton: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, shadowColor: '#DC2626', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 },
     modalContent: { width: '90%', maxWidth: 700, maxHeight: '90%', borderRadius: 24, overflow: 'hidden' },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#eee' },
     modalTitle: { fontSize: 20, fontWeight: '700' },
@@ -265,8 +338,13 @@ const localStyles = StyleSheet.create({
     statusButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
     statusButton: { padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#ddd' },
     statusButtonText: { fontSize: 13, fontWeight: '600' },
-    deleteModal: { width: '90%', maxWidth: 400, borderRadius: 24, padding: 24, alignItems: 'center' },
-    deleteTitle: { fontSize: 20, fontWeight: '700', marginTop: 16, marginBottom: 8 },
-    deleteMessage: { fontSize: 14, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
-    deleteActions: { flexDirection: 'row', gap: 12, width: '100%' },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
+    deleteModalContainer: { width: '90%', maxWidth: 400, borderRadius: 24, padding: 32, alignItems: 'center' },
+    modalIconContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+    deleteModalTitle: { fontSize: 22, fontWeight: '700', marginBottom: 12, textAlign: 'center' },
+    modalMessage: { fontSize: 15, textAlign: 'center', marginBottom: 28, lineHeight: 22 },
+    modalButtons: { flexDirection: 'row', gap: 12, width: '100%' },
+    modalButton: { flex: 1, flexDirection: 'row', paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    cancelButton: { backgroundColor: 'transparent', borderWidth: 1.5 },
+    modalButtonText: { fontSize: 16, fontWeight: '600' },
 });

@@ -3,16 +3,17 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useCallback, useLayoutEffect, useState } from 'react';
 import { Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { ModernActionButton, ModernFilterChip, ModernSearchBar, ModernStatusBadge, ModernTable } from '../../components/ModernUIComponents';
-import { themes } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { getGlobalStyles } from '../../styles/GlobalStyles';
+import { printFinanceDocument } from '../../services/pdfGenerator';
+import { getGlobalStyles, themes } from '../../styles/GlobalStyles';
 
 export default function ChecksScreen() {
     const navigation = useNavigation();
     const [checks, setChecks] = useState([]);
     const [filteredChecks, setFilteredChecks] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [companyInfo, setCompanyInfo] = useState({});
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -20,6 +21,7 @@ export default function ChecksScreen() {
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [selectedCheck, setSelectedCheck] = useState(null);
+    const [checkToDelete, setCheckToDelete] = useState(null);
 
     const [formCheckType, setFormCheckType] = useState('received');
     const [formCheckNumber, setFormCheckNumber] = useState('');
@@ -38,6 +40,13 @@ export default function ChecksScreen() {
     const styles = getGlobalStyles(theme);
 
     useLayoutEffect(() => {
+        const fetchCompanyInfo = async () => {
+            if (!user?.id) return;
+            const { data } = await supabase.from('company_info').select('*').eq('user_id', user.id).single();
+            if (data) setCompanyInfo(data);
+        };
+        fetchCompanyInfo();
+
         navigation.setOptions({
             headerRight: () => (
                 <View style={{ flexDirection: 'row', gap: 12, marginRight: 8 }}>
@@ -124,17 +133,23 @@ export default function ChecksScreen() {
     }, []);
 
     const confirmDelete = useCallback(async () => {
-        if (!selectedCheck) return;
+        if (!checkToDelete) return;
+        setDeleteModalVisible(false);
         setSaveLoading(true);
-        const { error } = await supabase.from('checks').delete().eq('id', selectedCheck.id);
+        const { error } = await supabase.from('checks').delete().eq('id', checkToDelete.id);
         if (error) alert('Erreur lors de la suppression');
         else {
-            setDeleteModalVisible(false);
-            setSelectedCheck(null);
+            setChecks(prev => prev.filter(check => check.id !== checkToDelete.id));
+            setCheckToDelete(null);
             await fetchChecks();
         }
         setSaveLoading(false);
-    }, [selectedCheck, fetchChecks]);
+    }, [checkToDelete, fetchChecks]);
+
+    const cancelDelete = useCallback(() => {
+        setDeleteModalVisible(false);
+        setCheckToDelete(null);
+    }, []);
 
     const handleSaveNewCheck = useCallback(async () => {
         if (!formCheckNumber || !formAmount) {
@@ -187,17 +202,6 @@ export default function ChecksScreen() {
         setSaveLoading(false);
     }, [selectedCheck, formCheckType, formCheckNumber, formDrawerName, formBankName, formAmount, formIssueDate, formDueDate, formDepositDate, formStatus, formNote, fetchChecks]);
 
-    const tableColumns = [
-        { key: 'check_number', label: 'N° Chèque', width: 120 },
-        { key: 'check_type', label: 'Type', width: 100 },
-        { key: 'drawer_name', label: 'Tireur', width: 180 },
-        { key: 'bank_name', label: 'Banque', width: 150 },
-        { key: 'amount', label: 'Montant', width: 120, align: 'right' },
-        { key: 'due_date', label: 'Échéance', width: 120 },
-        { key: 'status', label: 'Statut', width: 120 },
-        { key: 'actions', label: 'Actions', width: 150 },
-    ];
-
     const getStatusVariant = (status) => {
         const variants = { pending: 'warning', deposited: 'info', encashed: 'success', bounced: 'error', cancelled: 'error' };
         return variants[status] || 'default';
@@ -208,25 +212,82 @@ export default function ChecksScreen() {
         return labels[status] || status;
     };
 
-    const renderTableRow = (item) => ({
-        check_number: item.check_number || '-',
-        check_type: item.check_type === 'received' ? 'Reçu' : 'Émis',
-        drawer_name: item.drawer_name || '-',
-        bank_name: item.bank_name || '-',
-        amount: `${parseFloat(item.amount || 0).toFixed(3)} TND`,
-        due_date: item.due_date || '-',
-        status: <ModernStatusBadge label={getStatusLabel(item.status)} variant={getStatusVariant(item.status)} />,
-        actions: (
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity onPress={() => handleEditCheck(item)} style={[localStyles.actionButton, { backgroundColor: tTheme.primary + '20' }]}>
-                    <Ionicons name="pencil" size={16} color={tTheme.primary} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDeleteCheck(item)} style={[localStyles.actionButton, { backgroundColor: '#ff444420' }]}>
-                    <Ionicons name="trash" size={16} color="#ff4444" />
-                </TouchableOpacity>
-            </View>
-        ),
-    });
+    const tableColumns = [
+        { 
+            key: 'check_number', 
+            label: 'N° Chèque', 
+            flex: 1,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.check_number || '-'}</Text>
+        },
+        { 
+            key: 'check_type', 
+            label: 'Type', 
+            flex: 0.8,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.check_type === 'received' ? 'Reçu' : 'Émis'}</Text>
+        },
+        { 
+            key: 'drawer_name', 
+            label: 'Tireur', 
+            flex: 1.5,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.drawer_name || '-'}</Text>
+        },
+        { 
+            key: 'bank_name', 
+            label: 'Banque', 
+            flex: 1.2,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.bank_name || '-'}</Text>
+        },
+        { 
+            key: 'amount', 
+            label: 'Montant', 
+            flex: 1,
+            render: (item) => <Text style={{ color: tTheme.text, textAlign: 'right' }}>{parseFloat(item.amount || 0).toFixed(3)} TND</Text>
+        },
+        { 
+            key: 'due_date', 
+            label: 'Échéance', 
+            flex: 1,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.due_date || '-'}</Text>
+        },
+        { 
+            key: 'status', 
+            label: 'Statut', 
+            flex: 1,
+            render: (item) => <ModernStatusBadge label={getStatusLabel(item.status)} variant={getStatusVariant(item.status)} />
+        },
+        { 
+            key: 'actions', 
+            label: 'Actions', 
+            flex: 1,
+            render: (item) => (
+                <View style={localStyles.actionsContainer}>
+                    <TouchableOpacity
+                        style={[localStyles.actionButton, { backgroundColor: tTheme.primary + '15' }]}
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            printFinanceDocument(item, 'check', companyInfo);
+                        }}
+                    >
+                        <Ionicons name="print-outline" size={18} color={tTheme.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        activeOpacity={0.7}
+                        style={[localStyles.deleteButton, { 
+                            backgroundColor: '#FEE2E2',
+                            borderColor: '#EF4444'
+                        }]}
+                        onPress={(e) => {
+                            if (e && e.stopPropagation) e.stopPropagation();
+                            setCheckToDelete(item);
+                            setDeleteModalVisible(true);
+                        }}
+                    >
+                        <Ionicons name="trash" size={18} color="#DC2626" />
+                    </TouchableOpacity>
+                </View>
+            )
+        },
+    ];
 
     const renderForm = () => (
         <ScrollView style={{ maxHeight: 500 }}>
@@ -288,7 +349,7 @@ export default function ChecksScreen() {
                 </ScrollView>
             </View>
 
-            <ModernTable columns={tableColumns} data={filteredChecks} renderRow={renderTableRow} loading={loading} emptyMessage="Aucun chèque trouvé" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} />
+            <ModernTable columns={tableColumns} data={filteredChecks} loading={loading} emptyMessage="Aucun chèque trouvé" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} />
 
             <Modal visible={createModalVisible} animationType="slide" transparent={true} onRequestClose={() => setCreateModalVisible(false)}>
                 <View style={[styles.overlay, { backgroundColor: tTheme.overlay }]}>
@@ -322,15 +383,47 @@ export default function ChecksScreen() {
                 </View>
             </Modal>
 
-            <Modal visible={deleteModalVisible} animationType="fade" transparent={true} onRequestClose={() => setDeleteModalVisible(false)}>
-                <View style={[styles.overlay, { backgroundColor: tTheme.overlay }]}>
-                    <View style={[localStyles.deleteModal, { backgroundColor: tTheme.card, ...tTheme.shadow.large }]}>
-                        <Ionicons name="warning" size={48} color="#ff4444" />
-                        <Text style={[localStyles.deleteTitle, { color: tTheme.text }]}>Confirmer la suppression</Text>
-                        <Text style={[localStyles.deleteMessage, { color: tTheme.textSecondary }]}>Êtes-vous sûr de vouloir supprimer ce chèque ?</Text>
-                        <View style={localStyles.deleteActions}>
-                            <TouchableOpacity style={[styles.secondaryButton, { flex: 1, borderColor: tTheme.border }]} onPress={() => setDeleteModalVisible(false)}><Text style={[styles.primaryButtonText, { color: tTheme.text }]}>Annuler</Text></TouchableOpacity>
-                            <TouchableOpacity style={[styles.primaryButton, { flex: 1, backgroundColor: '#ff4444' }]} onPress={confirmDelete} disabled={saveLoading}><Text style={styles.primaryButtonText}>{saveLoading ? 'Suppression...' : 'Supprimer'}</Text></TouchableOpacity>
+            {/* Delete Confirmation Modal */}
+            <Modal visible={deleteModalVisible} transparent={true} animationType="fade" onRequestClose={cancelDelete}>
+                <View style={localStyles.modalOverlay}>
+                    <View style={[localStyles.deleteModalContainer, { backgroundColor: tTheme.card }]}>
+                        <View style={[localStyles.modalIconContainer, { backgroundColor: '#FEE2E2' }]}>
+                            <Ionicons name="warning" size={48} color="#DC2626" />
+                        </View>
+                        <Text style={[localStyles.deleteModalTitle, { color: tTheme.text }]}>
+                            Supprimer le chèque
+                        </Text>
+                        <Text style={[localStyles.modalMessage, { color: tTheme.textSecondary }]}>
+                            Voulez-vous vraiment supprimer le chèque{'\n'}
+                            <Text style={{ fontWeight: 'bold', color: tTheme.primary }}>
+                                {checkToDelete?.check_number}
+                            </Text>
+                            {'\n\n'}
+                            <Text style={{ color: '#DC2626', fontWeight: '600' }}>
+                                Cette action est irréversible.
+                            </Text>
+                        </Text>
+                        <View style={localStyles.modalButtons}>
+                            <TouchableOpacity
+                                style={[localStyles.modalButton, localStyles.cancelButton, { backgroundColor: tTheme.border }]}
+                                onPress={cancelDelete}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={[localStyles.modalButtonText, { color: tTheme.text }]}>
+                                    Annuler
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[localStyles.modalButton, { backgroundColor: '#DC2626' }]}
+                                onPress={confirmDelete}
+                                activeOpacity={0.7}
+                                disabled={saveLoading}
+                            >
+                                <Ionicons name="trash" size={18} color="#FFFFFF" />
+                                <Text style={[localStyles.modalButtonText, { color: '#FFFFFF', marginLeft: 6 }]}>
+                                    {saveLoading ? 'Suppression...' : 'Supprimer'}
+                                </Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
                 </View>
@@ -342,7 +435,31 @@ export default function ChecksScreen() {
 const localStyles = StyleSheet.create({
     filtersContainer: { padding: 16, marginBottom: 16, borderRadius: 16, marginHorizontal: 16, marginTop: 16 },
     filterChips: { marginTop: 12 },
-    actionButton: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    actionsContainer: {
+        flexDirection: 'row',
+        gap: 8,
+        alignItems: 'center',
+    },
+    actionButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    deleteButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        shadowColor: '#DC2626',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 2,
+    },
     modalContent: { width: '90%', maxWidth: 700, maxHeight: '90%', borderRadius: 24, overflow: 'hidden' },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#eee' },
     modalTitle: { fontSize: 20, fontWeight: '700' },
@@ -354,8 +471,66 @@ const localStyles = StyleSheet.create({
     statusButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
     statusButton: { padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#ddd' },
     statusButtonText: { fontSize: 13, fontWeight: '600' },
-    deleteModal: { width: '90%', maxWidth: 400, borderRadius: 24, padding: 24, alignItems: 'center' },
-    deleteTitle: { fontSize: 20, fontWeight: '700', marginTop: 16, marginBottom: 8 },
-    deleteMessage: { fontSize: 14, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
-    deleteActions: { flexDirection: 'row', gap: 12, width: '100%' },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    deleteModalContainer: {
+        width: '100%',
+        maxWidth: 400,
+        borderRadius: 16,
+        padding: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    modalIconContainer: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+        alignSelf: 'center',
+        marginBottom: 20,
+    },
+    deleteModalTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        marginBottom: 12,
+    },
+    modalMessage: {
+        fontSize: 15,
+        textAlign: 'center',
+        lineHeight: 22,
+        marginBottom: 24,
+    },
+    modalButtons: {
+        flexDirection: 'row',
+        gap: 12,
+        width: '100%',
+    },
+    modalButton: {
+        flex: 1,
+        flexDirection: 'row',
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+        minWidth: 0,
+    },
+    cancelButton: {
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+    },
+    modalButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+    },
 });

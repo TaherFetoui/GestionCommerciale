@@ -19,10 +19,11 @@ import {
     ModernStatusBadge,
     ModernTable,
 } from '../../components/ModernUIComponents';
-import { themes, translations } from '../../constants/AppConfig';
+import { translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { getGlobalStyles } from '../../styles/GlobalStyles';
+import { printFinanceDocument } from '../../services/pdfGenerator';
+import { getGlobalStyles, themes } from '../../styles/GlobalStyles';
 
 export default function SupplierReturnsScreen() {
     const navigation = useNavigation();
@@ -31,6 +32,7 @@ export default function SupplierReturnsScreen() {
     const [suppliers, setSuppliers] = useState([]);
     const [supplierInvoices, setSupplierInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [companyInfo, setCompanyInfo] = useState({});
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -38,6 +40,7 @@ export default function SupplierReturnsScreen() {
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [selectedReturn, setSelectedReturn] = useState(null);
+    const [returnToDelete, setReturnToDelete] = useState(null);
 
     // Form states
     const [formSupplier, setFormSupplier] = useState('');
@@ -58,6 +61,13 @@ export default function SupplierReturnsScreen() {
 
     // Header buttons setup
     useLayoutEffect(() => {
+        const fetchCompanyInfo = async () => {
+            if (!user?.id) return;
+            const { data } = await supabase.from('company_info').select('*').eq('user_id', user.id).single();
+            if (data) setCompanyInfo(data);
+        };
+        fetchCompanyInfo();
+
         navigation.setOptions({
             headerRight: () => (
                 <View style={{ flexDirection: 'row', gap: 12, marginRight: 8 }}>
@@ -228,24 +238,27 @@ export default function SupplierReturnsScreen() {
     }, []);
 
     const confirmDelete = useCallback(async () => {
-        if (!selectedReturn) return;
+        if (!returnToDelete) return;
         
-        setSaveLoading(true);
+        setDeleteModalVisible(false);
         const { error } = await supabase
             .from('supplier_returns')
             .delete()
-            .eq('id', selectedReturn.id);
+            .eq('id', returnToDelete.id);
 
         if (error) {
             console.error('Error deleting return:', error);
             alert('Erreur lors de la suppression');
         } else {
-            setDeleteModalVisible(false);
-            setSelectedReturn(null);
-            await fetchReturns();
+            setReturns(prevReturns => prevReturns.filter(r => r.id !== returnToDelete.id));
         }
-        setSaveLoading(false);
-    }, [selectedReturn, fetchReturns]);
+        setReturnToDelete(null);
+    }, [returnToDelete]);
+
+    const cancelDelete = useCallback(() => {
+        setDeleteModalVisible(false);
+        setReturnToDelete(null);
+    }, []);
 
     const handleSaveNewReturn = useCallback(async () => {
         if (!formSupplier || !formInvoiceNumber || !formRetentionAmount) {
@@ -305,18 +318,6 @@ export default function SupplierReturnsScreen() {
         setSaveLoading(false);
     }, [selectedReturn, formSupplier, formInvoiceNumber, formRetentionRate, formRetentionAmount, formInvoiceAmount, formRetentionDate, formNote, formStatus, fetchReturns]);
 
-    // Table configuration
-    const tableColumns = [
-        { key: 'supplier', label: 'Fournisseur', width: 250 },
-        { key: 'invoice_number', label: 'N° Facture', width: 180 },
-        { key: 'invoice_amount', label: 'Montant Facture', width: 180, align: 'right' },
-        { key: 'retention_rate', label: 'Taux Retenue (%)', width: 150, align: 'center' },
-        { key: 'retention_amount', label: 'Montant Retenue', width: 180, align: 'right' },
-        { key: 'retention_date', label: 'Date Retenue', width: 150 },
-        { key: 'status', label: 'Statut', width: 140 },
-        { key: 'actions', label: 'Actions', width: 120 },
-    ];
-
     const getStatusInfo = (status) => {
         const statuses = {
             pending: { label: 'En attente', variant: 'warning' },
@@ -326,35 +327,76 @@ export default function SupplierReturnsScreen() {
         return statuses[status] || { label: status, variant: 'neutral' };
     };
 
-    const renderTableRow = (item) => {
-        const statusInfo = getStatusInfo(item.status);
-        
-        return {
-            supplier: item.supplier || '-',
-            invoice_number: item.invoice_number || '-',
-            invoice_amount: `${parseFloat(item.invoice_amount || 0).toFixed(3)} DT`,
-            retention_rate: `${parseFloat(item.retention_rate || 0).toFixed(2)}%`,
-            retention_amount: `${parseFloat(item.retention_amount || 0).toFixed(3)} DT`,
-            retention_date: item.retention_date || '-',
-            status: <ModernStatusBadge label={statusInfo.label} variant={statusInfo.variant} />,
-            actions: (
-                <View style={{ flexDirection: 'row', gap: 8 }}>
+    // Table configuration
+    const tableColumns = [
+        { 
+            key: 'supplier', 
+            label: 'Fournisseur', 
+            flex: 1.5,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.supplier || '-'}</Text>
+        },
+        { 
+            key: 'invoice_number', 
+            label: 'N° Facture', 
+            flex: 1,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.invoice_number || '-'}</Text>
+        },
+        { 
+            key: 'invoice_amount', 
+            label: 'Montant Facture', 
+            flex: 1,
+            render: (item) => <Text style={{ color: tTheme.text, textAlign: 'right' }}>{parseFloat(item.invoice_amount || 0).toFixed(3)} DT</Text>
+        },
+        { 
+            key: 'retention_rate', 
+            label: 'Taux Retenue (%)', 
+            flex: 1,
+            render: (item) => <Text style={{ color: tTheme.text, textAlign: 'center' }}>{parseFloat(item.retention_rate || 0).toFixed(2)}%</Text>
+        },
+        { 
+            key: 'retention_amount', 
+            label: 'Montant Retenue', 
+            flex: 1,
+            render: (item) => <Text style={{ color: tTheme.text, textAlign: 'right' }}>{parseFloat(item.retention_amount || 0).toFixed(3)} DT</Text>
+        },
+        { 
+            key: 'retention_date', 
+            label: 'Date Retenue', 
+            flex: 1,
+            render: (item) => <Text style={{ color: tTheme.text }}>{item.retention_date || '-'}</Text>
+        },
+        { 
+            key: 'status', 
+            label: 'Statut', 
+            flex: 1,
+            render: (item) => {
+                const statusInfo = getStatusInfo(item.status);
+                return <ModernStatusBadge label={statusInfo.label} variant={statusInfo.variant} />;
+            }
+        },
+        { 
+            key: 'actions', 
+            label: 'Actions', 
+            flex: 1,
+            render: (item) => (
+                <View style={localStyles.actionsContainer}>
                     <TouchableOpacity
-                        onPress={() => handleEditReturn(item)}
-                        style={[localStyles.actionButton, { backgroundColor: tTheme.primary + '20' }]}
+                        style={[localStyles.actionButton, { backgroundColor: tTheme.primary + '15' }]}
+                        onPress={(e) => { e.stopPropagation(); printFinanceDocument(item, 'supplier_return', companyInfo); }}
                     >
-                        <Ionicons name="pencil" size={16} color={tTheme.primary} />
+                        <Ionicons name="print-outline" size={18} color={tTheme.primary} />
                     </TouchableOpacity>
                     <TouchableOpacity
-                        onPress={() => handleDeleteReturn(item)}
-                        style={[localStyles.actionButton, { backgroundColor: '#ff444420' }]}
+                        activeOpacity={0.7}
+                        style={[localStyles.deleteButton, { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]}
+                        onPress={(e) => { e.stopPropagation(); setReturnToDelete(item); setDeleteModalVisible(true); }}
                     >
-                        <Ionicons name="trash" size={16} color="#ff4444" />
+                        <Ionicons name="trash" size={18} color="#DC2626" />
                     </TouchableOpacity>
                 </View>
-            ),
-        };
-    };
+            )
+        },
+    ];
 
     const renderForm = (isEdit = false) => (
         <View>
@@ -514,7 +556,6 @@ export default function SupplierReturnsScreen() {
                     <ModernTable
                         columns={tableColumns}
                         data={filteredReturns}
-                        renderRow={renderTableRow}
                         loading={loading}
                         emptyMessage="Aucune retenue fournisseur trouvée"
                         refreshControl={
@@ -598,33 +639,37 @@ export default function SupplierReturnsScreen() {
                 </View>
             </Modal>
 
-            {/* Delete Modal */}
+            {/* Delete Confirmation Modal */}
             <Modal
                 visible={deleteModalVisible}
                 animationType="fade"
                 transparent={true}
-                onRequestClose={() => setDeleteModalVisible(false)}
+                onRequestClose={cancelDelete}
             >
-                <View style={[styles.overlay, { backgroundColor: tTheme.overlay }]}>
-                    <View style={[localStyles.deleteModal, { backgroundColor: tTheme.card, ...tTheme.shadow.large }]}>
-                        <Ionicons name="warning" size={48} color="#ff4444" />
-                        <Text style={[localStyles.deleteTitle, { color: tTheme.text }]}>Confirmer la suppression</Text>
-                        <Text style={[localStyles.deleteMessage, { color: tTheme.textSecondary }]}>
-                            Êtes-vous sûr de vouloir supprimer cette retenue ? Cette action est irréversible.
+                <View style={localStyles.modalOverlay}>
+                    <View style={[localStyles.deleteModalContainer, { backgroundColor: tTheme.card, ...tTheme.shadow.large }]}>
+                        <View style={localStyles.modalIconContainer}>
+                            <Ionicons name="warning" size={48} color="#DC2626" />
+                        </View>
+                        <Text style={[localStyles.deleteModalTitle, { color: tTheme.text }]}>Confirmer la suppression</Text>
+                        <Text style={[localStyles.modalMessage, { color: tTheme.textSecondary }]}>
+                            Êtes-vous sûr de vouloir supprimer la retenue de{' '}
+                            <Text style={{ fontWeight: '700', color: tTheme.text }}>{returnToDelete?.supplier_name}</Text> ?{' '}
+                            Cette action est irréversible.
                         </Text>
-                        <View style={localStyles.deleteActions}>
+                        <View style={localStyles.modalButtons}>
                             <TouchableOpacity
-                                style={[styles.secondaryButton, { flex: 1, borderColor: tTheme.border }]}
-                                onPress={() => setDeleteModalVisible(false)}
+                                style={[localStyles.modalButton, localStyles.cancelButton, { borderColor: tTheme.border }]}
+                                onPress={cancelDelete}
                             >
-                                <Text style={[styles.primaryButtonText, { color: tTheme.text }]}>Annuler</Text>
+                                <Text style={[localStyles.modalButtonText, { color: tTheme.text }]}>Annuler</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={[styles.primaryButton, { flex: 1, backgroundColor: '#ff4444' }]}
+                                style={[localStyles.modalButton, { backgroundColor: '#DC2626' }]}
                                 onPress={confirmDelete}
-                                disabled={saveLoading}
                             >
-                                <Text style={styles.primaryButtonText}>{saveLoading ? 'Suppression...' : 'Supprimer'}</Text>
+                                <Ionicons name="trash" size={18} color="#FFF" style={{ marginRight: 8 }} />
+                                <Text style={[localStyles.modalButtonText, { color: '#FFF' }]}>Supprimer</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -645,13 +690,9 @@ const localStyles = StyleSheet.create({
     filterChips: {
         marginTop: 12,
     },
-    actionButton: {
-        width: 32,
-        height: 32,
-        borderRadius: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
+    actionsContainer: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+    actionButton: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    deleteButton: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, shadowColor: '#DC2626', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 },
     modalContent: {
         width: '90%',
         maxWidth: 600,
@@ -698,28 +739,13 @@ const localStyles = StyleSheet.create({
         fontSize: 14,
         fontWeight: '600',
     },
-    deleteModal: {
-        width: '90%',
-        maxWidth: 400,
-        borderRadius: 24,
-        padding: 24,
-        alignItems: 'center',
-    },
-    deleteTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        marginTop: 16,
-        marginBottom: 8,
-    },
-    deleteMessage: {
-        fontSize: 14,
-        textAlign: 'center',
-        marginBottom: 24,
-        lineHeight: 20,
-    },
-    deleteActions: {
-        flexDirection: 'row',
-        gap: 12,
-        width: '100%',
-    },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center' },
+    deleteModalContainer: { width: '90%', maxWidth: 400, borderRadius: 24, padding: 32, alignItems: 'center' },
+    modalIconContainer: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+    deleteModalTitle: { fontSize: 22, fontWeight: '700', marginBottom: 12, textAlign: 'center' },
+    modalMessage: { fontSize: 15, textAlign: 'center', marginBottom: 28, lineHeight: 22 },
+    modalButtons: { flexDirection: 'row', gap: 12, width: '100%' },
+    modalButton: { flex: 1, flexDirection: 'row', paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    cancelButton: { backgroundColor: 'transparent', borderWidth: 1.5 },
+    modalButtonText: { fontSize: 16, fontWeight: '600' },
 });
