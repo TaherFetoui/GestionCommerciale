@@ -303,7 +303,7 @@ export default function CreateInvoiceScreen({ navigation, route }) {
         );
     });
 
-    // Fetch clients on component mount
+    // Fetch clients and generate invoice number on component mount
     useEffect(() => {
         const fetchClients = async () => {
             const { data, error } = await supabase.from('clients').select('id, name');
@@ -311,7 +311,45 @@ export default function CreateInvoiceScreen({ navigation, route }) {
             else setClients(data);
         };
         fetchClients();
-    }, [t.error]);
+        
+        // Auto-generate invoice number if creating new invoice
+        if (!isEditing && !invoiceNumber) {
+            const generateInvoiceNumber = async () => {
+                // Get the latest invoice number to increment
+                const { data, error } = await supabase
+                    .from('invoices')
+                    .select('invoice_number')
+                    .order('created_at', { ascending: false })
+                    .limit(1);
+                
+                if (error) {
+                    console.error('Error fetching last invoice:', error);
+                }
+                
+                // Generate number like FA-251128-001
+                const today = new Date();
+                const year = today.getFullYear().toString().slice(-2);
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                const day = String(today.getDate()).padStart(2, '0');
+                const dateStr = `${year}${month}${day}`;
+                
+                let sequence = 1;
+                if (data && data.length > 0) {
+                    const lastNumber = data[0].invoice_number;
+                    // Extract sequence from last invoice if it matches today's date pattern
+                    const match = lastNumber.match(/FA-\d{6}-(\d{3})/);
+                    if (match && lastNumber.includes(dateStr)) {
+                        sequence = parseInt(match[1], 10) + 1;
+                    }
+                }
+                
+                const newNumber = `FA-${dateStr}-${String(sequence).padStart(3, '0')}`;
+                setInvoiceNumber(newNumber);
+            };
+            
+            generateInvoiceNumber();
+        }
+    }, [t.error, isEditing, invoiceNumber]);
     
     // --- Automatic Calculations ---
     const { totalHT, totalVAT, totalTTC, vatSummary } = useMemo(() => {
@@ -422,10 +460,17 @@ export default function CreateInvoiceScreen({ navigation, route }) {
 
     // --- Save Invoice ---
     const handleSaveInvoice = async () => {
+        console.log('🔴 handleSaveInvoice CALLED');
+        console.log('🔴 selectedClientId:', selectedClientId);
+        console.log('🔴 invoiceNumber:', invoiceNumber);
+        
         if (!selectedClientId || !invoiceNumber) {
+            console.log('🔴 VALIDATION FAILED');
             Alert.alert(t.error, t.pleaseSelectClient);
             return;
         }
+        
+        console.log('🔴 Starting save process...');
         setLoading(true);
         
         const invoiceData = {
@@ -442,25 +487,33 @@ export default function CreateInvoiceScreen({ navigation, route }) {
             total_amount: totalTTC, // Total TTC goes into the main amount column
         };
         
+        console.log('🔴 Invoice data:', invoiceData);
+        
         let error;
         if (isEditing) {
+            console.log('🔴 Updating existing invoice...');
             // Update existing invoice
             const result = await supabase
                 .from('invoices')
                 .update(invoiceData)
                 .eq('id', invoiceToEdit.id);
             error = result.error;
+            console.log('🔴 Update result:', result);
         } else {
+            console.log('🔴 Creating new invoice...');
             // Create new invoice
             const result = await supabase
                 .from('invoices')
                 .insert([{ ...invoiceData, status: 'awaiting_payment' }]);
             error = result.error;
+            console.log('🔴 Insert result:', result);
         }
 
         if (error) {
+            console.error('🔴 Supabase error:', error);
             Alert.alert(t.error, error.message);
         } else {
+            console.log('🔴 SUCCESS!');
             Alert.alert(
                 t.success, 
                 isEditing ? 'Facture modifiée avec succès' : t.invoiceCreated
