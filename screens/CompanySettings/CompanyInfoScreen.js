@@ -1,9 +1,11 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
+    Image,
     Modal,
     ScrollView,
     StyleSheet,
@@ -59,12 +61,18 @@ export default function CompanyInfoScreen() {
     const [draftCompany, setDraftCompany] = useState(null);
     const [editingSection, setEditingSection] = useState(null);
     const [isConfirmModalVisible, setConfirmModalVisible] = useState(false);
+    const [logoUri, setLogoUri] = useState(null);
 
     const fetchCompanyInfo = useCallback(async () => {
         if (!user) return;
         setLoading(true);
         const { data, error } = await supabase.from('company_info').select('*').eq('user_id', user.id).single();
-        if (data) setCompany(data);
+        if (data) {
+            setCompany(data);
+            if (data.logo_url) {
+                setLogoUri(data.logo_url);
+            }
+        }
         setLoading(false);
     }, [user]);
 
@@ -78,10 +86,39 @@ export default function CompanyInfoScreen() {
     const handleCancel = () => {
         setEditingSection(null);
         setDraftCompany(null);
+        setLogoUri(company.logo_url || null);
     };
 
     const handleChange = (field, value) => {
         setDraftCompany(prev => ({ ...prev, [field]: value }));
+    };
+
+    const pickImage = async () => {
+        // Request permission
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permission requise', 'Nous avons besoin de la permission pour accéder à vos photos.');
+            return;
+        }
+
+        // Pick image
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+        });
+
+        if (!result.canceled && result.assets[0]) {
+            const uri = result.assets[0].uri;
+            setLogoUri(uri);
+            handleChange('logo_url', uri);
+        }
+    };
+
+    const removeLogo = () => {
+        setLogoUri(null);
+        handleChange('logo_url', null);
     };
 
     const promptSave = () => {
@@ -111,6 +148,77 @@ export default function CompanyInfoScreen() {
     return (
         <View style={styles.container}>
             <ScrollView contentContainerStyle={localStyles.scrollContent}>
+            
+            {/* Logo Section */}
+            <InfoSection
+                title="Logo de l'entreprise"
+                theme={theme}
+                isEditing={editingSection === 'logo'}
+                onEdit={() => handleEdit('logo')}
+                onCancel={handleCancel}
+                onSave={promptSave}
+            >
+                {editingSection === 'logo' ? (
+                    <View style={localStyles.logoEditContainer}>
+                        {logoUri ? (
+                            <View style={localStyles.logoPreviewContainer}>
+                                <Image 
+                                    source={{ uri: logoUri }} 
+                                    style={localStyles.logoPreview}
+                                    resizeMode="contain"
+                                />
+                                <View style={localStyles.logoActions}>
+                                    <TouchableOpacity 
+                                        style={[localStyles.logoButton, { backgroundColor: tTheme.primary }]}
+                                        onPress={pickImage}
+                                    >
+                                        <Ionicons name="image-outline" size={20} color="#FFF" />
+                                        <Text style={localStyles.logoButtonText}>Changer</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        style={[localStyles.logoButton, { backgroundColor: tTheme.danger }]}
+                                        onPress={removeLogo}
+                                    >
+                                        <Ionicons name="trash-outline" size={20} color="#FFF" />
+                                        <Text style={localStyles.logoButtonText}>Supprimer</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        ) : (
+                            <TouchableOpacity 
+                                style={[localStyles.logoUploadBox, { borderColor: tTheme.border, backgroundColor: tTheme.background }]}
+                                onPress={pickImage}
+                            >
+                                <Ionicons name="cloud-upload-outline" size={48} color={tTheme.textSecondary} />
+                                <Text style={[localStyles.uploadText, { color: tTheme.text }]}>
+                                    Ajouter un logo
+                                </Text>
+                                <Text style={[localStyles.uploadSubtext, { color: tTheme.textSecondary }]}>
+                                    Format recommandé: PNG, JPG (carré)
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                ) : (
+                    <View style={localStyles.logoDisplayContainer}>
+                        {company.logo_url ? (
+                            <Image 
+                                source={{ uri: company.logo_url }} 
+                                style={localStyles.logoDisplay}
+                                resizeMode="contain"
+                            />
+                        ) : (
+                            <View style={[localStyles.noLogoBox, { backgroundColor: tTheme.background }]}>
+                                <Ionicons name="business-outline" size={40} color={tTheme.textSecondary} />
+                                <Text style={[localStyles.noLogoText, { color: tTheme.textSecondary }]}>
+                                    Aucun logo
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                )}
+            </InfoSection>
+            
             <InfoSection
                 title="Informations Générales"
                 theme={theme}
@@ -202,6 +310,79 @@ const localStyles = StyleSheet.create({
     buttonRow: { flexDirection: 'row', justifyContent: 'flex-end', },
     actionButton: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8, marginLeft: 12, },
     actionButtonText: { fontWeight: 'bold' },
+    
+    // Logo styles
+    logoEditContainer: {
+        alignItems: 'center',
+        paddingVertical: 20,
+    },
+    logoPreviewContainer: {
+        alignItems: 'center',
+        width: '100%',
+    },
+    logoPreview: {
+        width: 150,
+        height: 150,
+        borderRadius: 16,
+        backgroundColor: '#F3F4F6',
+        marginBottom: 20,
+    },
+    logoActions: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    logoButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 8,
+        gap: 8,
+    },
+    logoButtonText: {
+        color: '#FFF',
+        fontWeight: '600',
+        fontSize: 14,
+    },
+    logoUploadBox: {
+        width: '100%',
+        padding: 40,
+        borderWidth: 2,
+        borderStyle: 'dashed',
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    uploadText: {
+        fontSize: 16,
+        fontWeight: '600',
+        marginTop: 12,
+    },
+    uploadSubtext: {
+        fontSize: 13,
+        marginTop: 4,
+    },
+    logoDisplayContainer: {
+        alignItems: 'center',
+        paddingVertical: 20,
+    },
+    logoDisplay: {
+        width: 120,
+        height: 120,
+        borderRadius: 12,
+    },
+    noLogoBox: {
+        width: 120,
+        height: 120,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    noLogoText: {
+        fontSize: 13,
+        marginTop: 8,
+    },
+    
     modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', },
     modalContent: { width: '90%', maxWidth: 400, borderRadius: 16, padding: 24, alignItems: 'center' },
     modalTitle: { fontSize: 22, fontWeight: 'bold', marginTop: 16, marginBottom: 8, textAlign: 'center' },

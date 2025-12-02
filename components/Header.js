@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { themes } from '../constants/AppConfig';
 import { useAuth } from '../context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
@@ -17,12 +17,30 @@ export default function Header({ title, navigation, onToggleSidebar, rightAction
     const [showNotifications, setShowNotifications] = useState(false);
     const [activities, setActivities] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [companyLogo, setCompanyLogo] = useState(null);
 
     useEffect(() => {
         if (user) {
             fetchActivities();
+            fetchCompanyLogo();
         }
     }, [user]);
+
+    const fetchCompanyLogo = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('company_info')
+                .select('logo_url')
+                .eq('user_id', user.id)
+                .single();
+            
+            if (data?.logo_url) {
+                setCompanyLogo(data.logo_url);
+            }
+        } catch (error) {
+            console.error('Error fetching company logo:', error);
+        }
+    };
 
     const fetchActivities = async () => {
         try {
@@ -218,9 +236,21 @@ export default function Header({ title, navigation, onToggleSidebar, rightAction
                         )}
                         
                         <TouchableOpacity onPress={() => setShowProfileMenu(!showProfileMenu)}>
-                            <View style={[styles.avatar, {backgroundColor: tTheme.primarySoft}]}>
-                                <Text style={{color: tTheme.primary, fontWeight: 'bold'}}>{username.charAt(0).toUpperCase()}</Text>
-                            </View>
+                            {companyLogo ? (
+                                <View style={[styles.logoAvatar, { borderColor: tTheme.primary }]}>
+                                    <Image 
+                                        source={{ uri: companyLogo }} 
+                                        style={styles.logoImage}
+                                        resizeMode="contain"
+                                    />
+                                </View>
+                            ) : (
+                                <View style={[styles.avatar, {backgroundColor: tTheme.primarySoft}]}>
+                                    <Text style={{color: tTheme.primary, fontWeight: 'bold'}}>
+                                        {username.charAt(0).toUpperCase()}
+                                    </Text>
+                                </View>
+                            )}
                         </TouchableOpacity>
                         
                         {/* Profile Dropdown Menu */}
@@ -332,6 +362,21 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0,
+    },
+    logoAvatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        borderWidth: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        backgroundColor: '#FFF',
+        overflow: 'hidden',
+    },
+    logoImage: {
+        width: 36,
+        height: 36,
     },
     menuOverlay: {
         position: 'fixed',

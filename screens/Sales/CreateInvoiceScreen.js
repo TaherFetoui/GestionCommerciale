@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -19,8 +19,8 @@ import { useResponsive } from '../../hooks/useResponsive';
 import { supabase } from '../../lib/supabase';
 import { getGlobalStyles } from '../../styles/GlobalStyles';
 
-// Modern Form Components
-const FormSection = React.memo(({ title, children, theme, rightButton }) => {
+// Modern Form Components (removed React.memo to fix TextInput focus issues)
+const FormSection = ({ title, children, theme, rightButton }) => {
     const tTheme = themes[theme];
     return (
         <View style={[getGlobalStyles(theme).card, localStyles.section]}>
@@ -31,9 +31,9 @@ const FormSection = React.memo(({ title, children, theme, rightButton }) => {
             {children}
         </View>
     );
-});
+};
 
-const FormInput = React.memo(({ 
+const FormInput = ({ 
     label, 
     value, 
     onChangeText, 
@@ -70,9 +70,9 @@ const FormInput = React.memo(({
             </View>
         </View>
     );
-});
+};
 
-const DatePicker = React.memo(({ label, date, onDateChange, theme }) => {
+const DatePicker = ({ label, date, onDateChange, theme }) => {
     const [showPicker, setShowPicker] = useState(false);
     const tTheme = themes[theme];
 
@@ -105,39 +105,77 @@ const DatePicker = React.memo(({ label, date, onDateChange, theme }) => {
             )}
         </View>
     );
-});
+};
 
-const SelectPicker = React.memo(({ label, selectedValue, onValueChange, options, theme, placeholder }) => {
+const SelectPicker = ({ label, selectedValue, onValueChange, options, theme, placeholder }) => {
     const tTheme = themes[theme];
+    const selectedOption = options.find(opt => opt.value === selectedValue);
+    const displayText = selectedOption ? selectedOption.label : placeholder;
+    
     return (
         <View style={localStyles.inputContainer}>
-            <Text style={[getGlobalStyles(theme).label, { color: tTheme.text }]}>{label}</Text>
+            <Text style={[getGlobalStyles(theme).label, { color: tTheme.text, marginBottom: 8, fontSize: 14, fontWeight: '600' }]}>
+                {label}
+            </Text>
             <View style={[
-                localStyles.inputWrapper, 
-                localStyles.pickerWrapper,
-                { backgroundColor: tTheme.card, borderColor: tTheme.border }
+                localStyles.modernPickerWrapper,
+                { 
+                    backgroundColor: tTheme.card, 
+                    borderColor: selectedValue ? tTheme.primary : tTheme.border,
+                    borderWidth: selectedValue ? 2 : 1,
+                }
             ]}>
-                <Ionicons name="person-outline" size={20} color={tTheme.textSecondary} style={localStyles.inputIcon} />
-                <Picker
-                    selectedValue={selectedValue}
-                    onValueChange={onValueChange}
-                    style={[localStyles.picker, { color: tTheme.text }]}
-                >
-                    <Picker.Item label={placeholder} value="" />
-                    {options.map(option => (
+                <View style={localStyles.pickerIconContainer}>
+                    <Ionicons 
+                        name="people-circle-outline" 
+                        size={24} 
+                        color={selectedValue ? tTheme.primary : tTheme.textSecondary} 
+                    />
+                </View>
+                <View style={localStyles.pickerContent}>
+                    <Text style={[
+                        localStyles.pickerLabel,
+                        { 
+                            color: selectedValue ? tTheme.text : tTheme.textSecondary,
+                            fontWeight: selectedValue ? '600' : '400'
+                        }
+                    ]}>
+                        {displayText}
+                    </Text>
+                    <Picker
+                        selectedValue={selectedValue}
+                        onValueChange={onValueChange}
+                        style={localStyles.hiddenPicker}
+                        dropdownIconColor={tTheme.primary}
+                    >
                         <Picker.Item 
-                            key={option.value} 
-                            label={option.label} 
-                            value={option.value} 
+                            label={placeholder} 
+                            value="" 
+                            color={tTheme.textSecondary}
                         />
-                    ))}
-                </Picker>
+                        {options.map(option => (
+                            <Picker.Item 
+                                key={option.value} 
+                                label={option.label} 
+                                value={option.value}
+                                color={tTheme.text}
+                            />
+                        ))}
+                    </Picker>
+                </View>
+                <View style={localStyles.pickerChevronContainer}>
+                    <Ionicons 
+                        name="chevron-down" 
+                        size={20} 
+                        color={tTheme.primary} 
+                    />
+                </View>
             </View>
         </View>
     );
-});
+};
 
-const ActionButton = React.memo(({ onPress, icon, title, variant = 'primary', theme, loading = false }) => {
+const ActionButton = ({ onPress, icon, title, variant = 'primary', theme, loading = false }) => {
     const tTheme = themes[theme];
     const buttonStyle = variant === 'primary' 
         ? { backgroundColor: tTheme.primary } 
@@ -161,7 +199,161 @@ const ActionButton = React.memo(({ onPress, icon, title, variant = 'primary', th
             </Text>
         </TouchableOpacity>
     );
-});
+};
+
+// LineItem Card Component - MOVED OUTSIDE to prevent re-creation on every render
+const LineItemCard = ({ item, index, onItemChange, onRemoveItem, theme, tTheme, t, styles, lineItems }) => {
+    const itemTotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
+    
+    return (
+        <View style={[styles.card, localStyles.lineItemCard]}>
+            <View style={localStyles.lineItemHeader}>
+                <Text style={[localStyles.lineItemTitle, { color: tTheme.text }]}>
+                    {t.article || 'Item'} #{index + 1}
+                </Text>
+                <TouchableOpacity 
+                    onPress={() => onRemoveItem(index)}
+                    style={[localStyles.removeButton, { backgroundColor: tTheme.danger }]}
+                    disabled={lineItems.length === 1}
+                >
+                    <Ionicons name="trash-outline" size={16} color={tTheme.buttonText} />
+                </TouchableOpacity>
+            </View>
+            
+            {/* Description - Direct TextInput */}
+            <View style={localStyles.inputContainer}>
+                <Text style={[getGlobalStyles(theme).label, { color: tTheme.text }]}>
+                    {t.description || 'Description'}
+                </Text>
+                <View style={[
+                    localStyles.inputWrapper, 
+                    { backgroundColor: tTheme.card, borderColor: tTheme.border }
+                ]}>
+                    <Ionicons name="document-text-outline" size={20} color={tTheme.textSecondary} style={localStyles.inputIcon} />
+                    <TextInput
+                        style={[localStyles.textInput, { 
+                            color: tTheme.text, 
+                            flex: 1, 
+                            minHeight: 80,
+                            maxHeight: 120,
+                            paddingTop: 12
+                        }]}
+                        value={item.description}
+                        onChangeText={(text) => onItemChange(index, 'description', text)}
+                        placeholder={t.enterDescription || 'Enter item description'}
+                        placeholderTextColor={tTheme.textSecondary}
+                        multiline={true}
+                        textAlignVertical="top"
+                        autoCorrect={false}
+                        autoCapitalize="sentences"
+                        scrollEnabled={true}
+                    />
+                </View>
+            </View>
+            
+            <View style={localStyles.lineItemRow}>
+                <View style={localStyles.lineItemField}>
+                    <FormInput
+                        label={t.quantity || 'Qty'}
+                        value={item.quantity}
+                        onChangeText={(val) => onItemChange(index, 'quantity', val)}
+                        placeholder="1"
+                        icon="cube-outline"
+                        theme={theme}
+                        keyboardType="numeric"
+                    />
+                </View>
+                <View style={localStyles.lineItemField}>
+                    <FormInput
+                        label={t.unitPrice || 'Unit Price'}
+                        value={item.unitPrice}
+                        onChangeText={(val) => onItemChange(index, 'unitPrice', val)}
+                        placeholder="0.000"
+                        icon="pricetag-outline"
+                        theme={theme}
+                        keyboardType="numeric"
+                    />
+                </View>
+                <View style={localStyles.lineItemField}>
+                    <FormInput
+                        label="VAT %"
+                        value={item.vatRate}
+                        onChangeText={(val) => onItemChange(index, 'vatRate', val)}
+                        placeholder="19"
+                        icon="calculator-outline"
+                        theme={theme}
+                        keyboardType="numeric"
+                    />
+                </View>
+            </View>
+            
+            <View style={[localStyles.itemTotal, { backgroundColor: tTheme.primarySoft }]}>
+                <Text style={[localStyles.itemTotalText, { color: tTheme.primary }]}>
+                    Total: {itemTotal.toFixed(3)} TND
+                </Text>
+            </View>
+        </View>
+    );
+};
+
+// Summary Card Component - MOVED OUTSIDE to prevent re-creation on every render
+const SummaryCard = ({ totalHT, totalVAT, totalTTC, vatSummary, fiscalStamp, setFiscalStamp, theme, tTheme, t, styles }) => (
+    <View style={[styles.card, localStyles.summaryCard]}>
+        <Text style={[localStyles.sectionTitle, { color: tTheme.text, marginBottom: 20 }]}>
+            {t.summary || 'Invoice Summary'}
+        </Text>
+        
+        <View style={localStyles.summaryContent}>
+            <View style={localStyles.summaryRow}>
+                <Text style={[localStyles.summaryLabel, { color: tTheme.textSecondary }]}>
+                    Total HT (excl. VAT)
+                </Text>
+                <Text style={[localStyles.summaryValue, { color: tTheme.text }]}>
+                    {totalHT.toFixed(3)} TND
+                </Text>
+            </View>
+            
+            {Object.entries(vatSummary).map(([rate, totals]) => (
+                <View key={rate} style={localStyles.summaryRow}>
+                    <Text style={[localStyles.summaryLabel, { color: tTheme.textSecondary }]}>
+                        VAT ({rate}%) on {totals.base.toFixed(3)} TND
+                    </Text>
+                    <Text style={[localStyles.summaryValue, { color: tTheme.text }]}>
+                        {totals.amount.toFixed(3)} TND
+                    </Text>
+                </View>
+            ))}
+            
+            <View style={localStyles.summaryRow}>
+                <Text style={[localStyles.summaryLabel, { color: tTheme.textSecondary }]}>
+                    Fiscal Stamp
+                </Text>
+                <View style={localStyles.fiscalStampInput}>
+                    <TextInput
+                        style={[localStyles.fiscalInput, { color: tTheme.text, borderColor: tTheme.border }]}
+                        value={fiscalStamp}
+                        onChangeText={setFiscalStamp}
+                        keyboardType="numeric"
+                        placeholder="1.000"
+                        placeholderTextColor={tTheme.textSecondary}
+                    />
+                    <Text style={[localStyles.currency, { color: tTheme.textSecondary }]}>TND</Text>
+                </View>
+            </View>
+            
+            <View style={[localStyles.divider, { backgroundColor: tTheme.border }]} />
+            
+            <View style={[localStyles.summaryRow, localStyles.totalRow]}>
+                <Text style={[localStyles.totalLabel, { color: tTheme.text }]}>
+                    Total TTC (incl. VAT)
+                </Text>
+                <Text style={[localStyles.totalValue, { color: tTheme.primary }]}>
+                    {totalTTC.toFixed(3)} TND
+                </Text>
+            </View>
+        </View>
+    </View>
+);
 
 export default function CreateInvoiceScreen({ navigation, route }) {
     const { user, theme, language } = useAuth();
@@ -197,112 +389,6 @@ export default function CreateInvoiceScreen({ navigation, route }) {
         });
     }, [navigation, isEditing]);
     
-    // Add LineItem component
-    const LineItemCard = React.memo(({ item, index, onItemChange, onRemoveItem }) => {
-        const itemTotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
-        const [localDescription, setLocalDescription] = useState(item.description);
-        
-        // Update local state when item changes from outside
-        useEffect(() => {
-            setLocalDescription(item.description);
-        }, [item.description]);
-        
-        const handleDescriptionChange = (text) => {
-            setLocalDescription(text);
-            onItemChange(index, 'description', text);
-        };
-        
-        return (
-            <View style={[styles.card, localStyles.lineItemCard]}>
-                <View style={localStyles.lineItemHeader}>
-                    <Text style={[localStyles.lineItemTitle, { color: tTheme.text }]}>
-                        {t.article || 'Item'} #{index + 1}
-                    </Text>
-                    <TouchableOpacity 
-                        onPress={() => onRemoveItem(index)}
-                        style={[localStyles.removeButton, { backgroundColor: tTheme.danger }]}
-                        disabled={lineItems.length === 1}
-                    >
-                        <Ionicons name="trash-outline" size={16} color={tTheme.buttonText} />
-                    </TouchableOpacity>
-                </View>
-                
-                {/* Description - Direct TextInput */}
-                <View style={localStyles.inputContainer}>
-                    <Text style={[getGlobalStyles(theme).label, { color: tTheme.text }]}>
-                        {t.description || 'Description'}
-                    </Text>
-                    <View style={[
-                        localStyles.inputWrapper, 
-                        { backgroundColor: tTheme.card, borderColor: tTheme.border }
-                    ]}>
-                        <Ionicons name="document-text-outline" size={20} color={tTheme.textSecondary} style={localStyles.inputIcon} />
-                        <TextInput
-                            style={[localStyles.textInput, { 
-                                color: tTheme.text, 
-                                flex: 1, 
-                                minHeight: 80,
-                                maxHeight: 120,
-                                paddingTop: 12
-                            }]}
-                            value={localDescription}
-                            onChangeText={handleDescriptionChange}
-                            placeholder={t.enterDescription || 'Enter item description'}
-                            placeholderTextColor={tTheme.textSecondary}
-                            multiline={true}
-                            textAlignVertical="top"
-                            autoCorrect={false}
-                            autoCapitalize="sentences"
-                            scrollEnabled={true}
-                        />
-                    </View>
-                </View>
-                
-                <View style={localStyles.lineItemRow}>
-                    <View style={localStyles.lineItemField}>
-                        <FormInput
-                            label={t.quantity || 'Qty'}
-                            value={item.quantity}
-                            onChangeText={(val) => onItemChange(index, 'quantity', val)}
-                            placeholder="1"
-                            icon="cube-outline"
-                            theme={theme}
-                            keyboardType="numeric"
-                        />
-                    </View>
-                    <View style={localStyles.lineItemField}>
-                        <FormInput
-                            label={t.unitPrice || 'Unit Price'}
-                            value={item.unitPrice}
-                            onChangeText={(val) => onItemChange(index, 'unitPrice', val)}
-                            placeholder="0.000"
-                            icon="pricetag-outline"
-                            theme={theme}
-                            keyboardType="numeric"
-                        />
-                    </View>
-                    <View style={localStyles.lineItemField}>
-                        <FormInput
-                            label="VAT %"
-                            value={item.vatRate}
-                            onChangeText={(val) => onItemChange(index, 'vatRate', val)}
-                            placeholder="19"
-                            icon="calculator-outline"
-                            theme={theme}
-                            keyboardType="numeric"
-                        />
-                    </View>
-                </View>
-                
-                <View style={[localStyles.itemTotal, { backgroundColor: tTheme.primarySoft }]}>
-                    <Text style={[localStyles.itemTotalText, { color: tTheme.primary }]}>
-                        Total: {itemTotal.toFixed(3)} TND
-                    </Text>
-                </View>
-            </View>
-        );
-    });
-
     // Fetch clients and generate invoice number on component mount
     useEffect(() => {
         const fetchClients = async () => {
@@ -398,65 +484,6 @@ export default function CreateInvoiceScreen({ navigation, route }) {
         const newItems = lineItems.filter((_, i) => i !== index);
         setLineItems(newItems);
     };
-
-    // Summary Component
-    const SummaryCard = React.memo(() => (
-        <View style={[styles.card, localStyles.summaryCard]}>
-            <Text style={[localStyles.sectionTitle, { color: tTheme.text, marginBottom: 20 }]}>
-                {t.summary || 'Invoice Summary'}
-            </Text>
-            
-            <View style={localStyles.summaryContent}>
-                <View style={localStyles.summaryRow}>
-                    <Text style={[localStyles.summaryLabel, { color: tTheme.textSecondary }]}>
-                        Total HT (excl. VAT)
-                    </Text>
-                    <Text style={[localStyles.summaryValue, { color: tTheme.text }]}>
-                        {totalHT.toFixed(3)} TND
-                    </Text>
-                </View>
-                
-                {Object.entries(vatSummary).map(([rate, totals]) => (
-                    <View key={rate} style={localStyles.summaryRow}>
-                        <Text style={[localStyles.summaryLabel, { color: tTheme.textSecondary }]}>
-                            VAT ({rate}%) on {totals.base.toFixed(3)} TND
-                        </Text>
-                        <Text style={[localStyles.summaryValue, { color: tTheme.text }]}>
-                            {totals.amount.toFixed(3)} TND
-                        </Text>
-                    </View>
-                ))}
-                
-                <View style={localStyles.summaryRow}>
-                    <Text style={[localStyles.summaryLabel, { color: tTheme.textSecondary }]}>
-                        Fiscal Stamp
-                    </Text>
-                    <View style={localStyles.fiscalStampInput}>
-                        <TextInput
-                            style={[localStyles.fiscalInput, { color: tTheme.text, borderColor: tTheme.border }]}
-                            value={fiscalStamp}
-                            onChangeText={setFiscalStamp}
-                            keyboardType="numeric"
-                            placeholder="1.000"
-                            placeholderTextColor={tTheme.textSecondary}
-                        />
-                        <Text style={[localStyles.currency, { color: tTheme.textSecondary }]}>TND</Text>
-                    </View>
-                </View>
-                
-                <View style={[localStyles.divider, { backgroundColor: tTheme.border }]} />
-                
-                <View style={[localStyles.summaryRow, localStyles.totalRow]}>
-                    <Text style={[localStyles.totalLabel, { color: tTheme.text }]}>
-                        Total TTC (incl. VAT)
-                    </Text>
-                    <Text style={[localStyles.totalValue, { color: tTheme.primary }]}>
-                        {totalTTC.toFixed(3)} TND
-                    </Text>
-                </View>
-            </View>
-        </View>
-    ));
 
     // --- Save Invoice ---
     const handleSaveInvoice = async () => {
@@ -606,17 +633,33 @@ export default function CreateInvoiceScreen({ navigation, route }) {
             >
                 {lineItems.map((item, index) => (
                     <LineItemCard
-                        key={index}
+                        key={`line-item-${index}`}
                         item={item}
                         index={index}
                         onItemChange={handleItemChange}
                         onRemoveItem={handleRemoveItem}
+                        theme={theme}
+                        tTheme={tTheme}
+                        t={t}
+                        styles={styles}
+                        lineItems={lineItems}
                     />
                 ))}
             </FormSection>
 
             {/* Summary */}
-            <SummaryCard />
+            <SummaryCard 
+                totalHT={totalHT}
+                totalVAT={totalVAT}
+                totalTTC={totalTTC}
+                vatSummary={vatSummary}
+                fiscalStamp={fiscalStamp}
+                setFiscalStamp={setFiscalStamp}
+                theme={theme}
+                tTheme={tTheme}
+                t={t}
+                styles={styles}
+            />
 
             {/* Save Button */}
             <View style={localStyles.saveButtonContainer}>
@@ -687,6 +730,52 @@ const localStyles = StyleSheet.create({
     },
     picker: {
         flex: 1,
+        marginLeft: 8,
+    },
+    
+    // Modern Picker Styles
+    modernPickerWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 16,
+        minHeight: 64,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        position: 'relative',
+    },
+    pickerIconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    pickerContent: {
+        flex: 1,
+        position: 'relative',
+    },
+    pickerLabel: {
+        fontSize: 16,
+        lineHeight: 24,
+    },
+    hiddenPicker: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        opacity: 0,
+        width: '100%',
+        height: '100%',
+    },
+    pickerChevronContainer: {
         marginLeft: 8,
     },
     
