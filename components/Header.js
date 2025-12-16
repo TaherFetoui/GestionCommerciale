@@ -10,7 +10,6 @@ export default function Header({ title, navigation, onToggleSidebar, rightAction
     const { theme, user, toggleTheme, signOut } = useAuth();
     const { isMobile, getContentPadding } = useResponsive();
     const tTheme = themes[theme];
-    const username = user?.email ? user.email.split('@')[0] : 'Guest';
     const canGoBack = navigation?.canGoBack();
     const padding = getContentPadding();
     const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -32,8 +31,21 @@ export default function Header({ title, navigation, onToggleSidebar, rightAction
         if (user) {
             const capitalizeFirstLetter = (str) => str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
             
-            if (user.user_metadata?.full_name) {
+            // Try to get user's profile name from company_info first
+            const { data: companyData } = await supabase
+                .from('company_info')
+                .select('name')
+                .eq('user_id', user.id)
+                .single();
+            
+            if (companyData?.name) {
+                setProfileName(companyData.name);
+            } else if (user.user_metadata?.full_name) {
                 setProfileName(capitalizeFirstLetter(user.user_metadata.full_name));
+            } else if (user.user_metadata?.display_name) {
+                setProfileName(capitalizeFirstLetter(user.user_metadata.display_name));
+            } else if (user.user_metadata?.name) {
+                setProfileName(capitalizeFirstLetter(user.user_metadata.name));
             } else if (user.email) {
                 setProfileName(capitalizeFirstLetter(user.email.split('@')[0]));
             }
@@ -264,7 +276,7 @@ export default function Header({ title, navigation, onToggleSidebar, rightAction
                             ) : (
                                 <View style={[styles.avatar, {backgroundColor: tTheme.primarySoft}]}>
                                     <Text style={{color: tTheme.primary, fontWeight: 'bold'}}>
-                                        {username.charAt(0).toUpperCase()}
+                                        {profileName ? profileName.charAt(0).toUpperCase() : 'U'}
                                     </Text>
                                 </View>
                             )}

@@ -332,15 +332,6 @@ export default function LoginScreen() {
                                         )}
                                     </LinearGradient>
                                 </TouchableOpacity>
-
-                                {/* Create Account Button */}
-                                <TouchableOpacity 
-                                    style={styles.createAccountButton}
-                                    onPress={createTestUser}
-                                >
-                                    <Ionicons name="person-add-outline" size={16} color={tTheme.primary} />
-                                    <Text style={styles.createAccountText}>Créer un compte</Text>
-                                </TouchableOpacity>
                             </LinearGradient>
                         </Animated.View>
                     </Animated.View>
