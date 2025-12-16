@@ -18,13 +18,27 @@ export default function Header({ title, navigation, onToggleSidebar, rightAction
     const [activities, setActivities] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [companyLogo, setCompanyLogo] = useState(null);
+    const [profileName, setProfileName] = useState('');
 
     useEffect(() => {
         if (user) {
             fetchActivities();
             fetchCompanyLogo();
+            fetchProfile();
         }
     }, [user]);
+
+    const fetchProfile = async () => {
+        if (user) {
+            const capitalizeFirstLetter = (str) => str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
+            
+            if (user.user_metadata?.full_name) {
+                setProfileName(capitalizeFirstLetter(user.user_metadata.full_name));
+            } else if (user.email) {
+                setProfileName(capitalizeFirstLetter(user.email.split('@')[0]));
+            }
+        }
+    };
 
     const fetchCompanyLogo = async () => {
         try {
@@ -235,7 +249,10 @@ export default function Header({ title, navigation, onToggleSidebar, rightAction
                             </>
                         )}
                         
-                        <TouchableOpacity onPress={() => setShowProfileMenu(!showProfileMenu)}>
+                        <TouchableOpacity 
+                            onPress={() => setShowProfileMenu(!showProfileMenu)}
+                            style={styles.profileContainer}
+                        >
                             {companyLogo ? (
                                 <View style={[styles.logoAvatar, { borderColor: tTheme.primary }]}>
                                     <Image 
@@ -250,6 +267,11 @@ export default function Header({ title, navigation, onToggleSidebar, rightAction
                                         {username.charAt(0).toUpperCase()}
                                     </Text>
                                 </View>
+                            )}
+                            {profileName && (
+                                <Text style={[styles.profileName, { color: tTheme.text }]}>
+                                    {profileName}
+                                </Text>
                             )}
                         </TouchableOpacity>
                         
@@ -377,6 +399,16 @@ const styles = StyleSheet.create({
     logoImage: {
         width: 36,
         height: 36,
+    },
+    profileContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    profileName: {
+        fontSize: 14,
+        fontWeight: '600',
+        textTransform: 'capitalize',
     },
     menuOverlay: {
         position: 'fixed',

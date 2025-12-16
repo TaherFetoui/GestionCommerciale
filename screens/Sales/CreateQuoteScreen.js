@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useEffect, useMemo, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
     FormActions,
     FormCard,
@@ -11,6 +11,7 @@ import {
     FormSubmitButton,
     ModernFormModal
 } from '../../components/ModernForm';
+import { ModernSearchBar } from '../../components/ModernUIComponents';
 import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
@@ -28,23 +29,70 @@ export default function CreateQuoteScreen({ navigation }) {
     const [quoteNumber, setQuoteNumber] = useState('');
     const [issueDate, setIssueDate] = useState(new Date());
     const [expiryDate, setExpiryDate] = useState(new Date(new Date().setDate(new Date().getDate() + 30)));
-    const [items, setItems] = useState([{ description: '', quantity: '1', unitPrice: '0' }]);
+    const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
     const [showIssueDatePicker, setShowIssueDatePicker] = useState(false);
     const [showExpiryDatePicker, setShowExpiryDatePicker] = useState(false);
     const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
+    const [showArticleModal, setShowArticleModal] = useState(false);
+    const [availableArticles, setAvailableArticles] = useState([]);
+    const [articleSearchQuery, setArticleSearchQuery] = useState('');
+    const [loadingArticles, setLoadingArticles] = useState(false);
 
     useEffect(() => {
-        const fetchClients = async () => {
-            const { data, error } = await supabase.from('clients').select('id, name').eq('user_id', user.id);
-            if (error) {
-                setToast({ visible: true, message: error.message, type: 'error' });
+        const fetchInitialData = async () => {
+            // Fetch clients
+            const { data: clientsData, error: clientsError } = await supabase
+                .from('clients')
+                .select('id, name')
+                .eq('user_id', user.id);
+            
+            if (clientsError) {
+                setToast({ visible: true, message: clientsError.message, type: 'error' });
             } else {
-                setClients(data);
+                setClients(clientsData);
             }
+
+            // Generate quote number
+            const { data: lastQuote } = await supabase
+                .from('quotes')
+                .select('quote_number')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (lastQuote && lastQuote.quote_number) {
+                const match = lastQuote.quote_number.match(/DEV-(\d+)/);
+                if (match) {
+                    const nextNumber = parseInt(match[1]) + 1;
+                    setQuoteNumber(`DEV-${String(nextNumber).padStart(3, '0')}`);
+                } else {
+                    setQuoteNumber('DEV-001');
+                }
+            } else {
+                setQuoteNumber('DEV-001');
+            }
+
+            // Fetch available articles
+            fetchArticles();
         };
-        fetchClients();
+        fetchInitialData();
     }, [user.id]);
+
+    const fetchArticles = async () => {
+        setLoadingArticles(true);
+        const { data, error } = await supabase
+            .from('items')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('name');
+        
+        if (!error && data) {
+            setAvailableArticles(data);
+        }
+        setLoadingArticles(false);
+    };
 
     const totalAmount = useMemo(() => {
         return items.reduce((sum, item) => {
@@ -60,25 +108,49 @@ export default function CreateQuoteScreen({ navigation }) {
         setItems(newItems);
     };
 
-    const handleAddItem = () => {
-        setItems([...items, { description: '', quantity: '1', unitPrice: '0' }]);
+    const handleAddArticle = (article) => {
+        const newItem = {
+            article_id: article.id,
+            description: article.name,
+            quantity: 1,
+            unitPrice: parseFloat(article.price) || 0,
+        };
+        setItems([...items, newItem]);
+        setShowArticleModal(false);
+        setArticleSearchQuery('');
     };
 
     const handleRemoveItem = (index) => {
-        if (items.length > 1) {
-            setItems(items.filter((_, i) => i !== index));
-        }
+        setItems(items.filter((_, i) => i !== index));
     };
 
+    const filteredAvailableArticles = useMemo(() => {
+        if (!articleSearchQuery) return availableArticles;
+        return availableArticles.filter(article =>
+            article.name?.toLowerCase().includes(articleSearchQuery.toLowerCase()) ||
+            article.reference?.toLowerCase().includes(articleSearchQuery.toLowerCase())
+        );
+    }, [availableArticles, articleSearchQuery]);
+
     const handleSaveQuote = async () => {
-        if (!selectedClientId || !quoteNumber) {
+        if (!selectedClientId) {
             setToast({
                 visible: true,
-                message: 'Client et numéro de devis sont requis.',
+                message: 'Veuillez sélectionner un client.',
                 type: 'error',
             });
             return;
         }
+
+        if (items.length === 0) {
+            setToast({
+                visible: true,
+                message: 'Veuillez ajouter au moins un article.',
+                type: 'error',
+            });
+            return;
+        }
+
         setLoading(true);
         const { error } = await supabase.from('quotes').insert([{
             user_id: user.id,
@@ -142,6 +214,7 @@ export default function CreateQuoteScreen({ navigation }) {
                             placeholder="DEV-001"
                             icon="barcode"
                             required
+                            editable={false}
                             theme={theme}
                         />
 
@@ -218,77 +291,85 @@ export default function CreateQuoteScreen({ navigation }) {
                         theme={theme}
                         rightButton={
                             <TouchableOpacity
-                                onPress={handleAddItem}
-                                style={[localStyles.addButton, { backgroundColor: tTheme.success }]}
+                                onPress={() => setShowArticleModal(true)}
+                                style={[localStyles.addButton, { backgroundColor: tTheme.primary }]}
                             >
                                 <Ionicons name="add" size={24} color="#FFFFFF" />
                             </TouchableOpacity>
                         }
                     >
-                        {items.map((item, index) => (
-                            <View 
-                                key={index}
-                                style={[localStyles.itemCard, { 
-                                    backgroundColor: tTheme.background,
-                                    borderColor: tTheme.border
-                                }]}
-                            >
-                                <View style={localStyles.itemHeader}>
-                                    <Text style={[localStyles.itemNumber, { color: tTheme.textSecondary }]}>
-                                        Article #{index + 1}
-                                    </Text>
-                                    {items.length > 1 && (
+                        {items.length === 0 ? (
+                            <View style={localStyles.emptyState}>
+                                <Ionicons name="cube-outline" size={48} color={tTheme.textSecondary} />
+                                <Text style={[localStyles.emptyText, { color: tTheme.textSecondary }]}>
+                                    Aucun article ajouté
+                                </Text>
+                                <TouchableOpacity
+                                    onPress={() => setShowArticleModal(true)}
+                                    style={[localStyles.emptyButton, { backgroundColor: tTheme.primary }]}
+                                >
+                                    <Text style={localStyles.emptyButtonText}>Ajouter un article</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            items.map((item, index) => (
+                                <View 
+                                    key={index}
+                                    style={[localStyles.itemCard, { 
+                                        backgroundColor: tTheme.background,
+                                        borderColor: tTheme.border
+                                    }]}
+                                >
+                                    <View style={localStyles.itemHeader}>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[localStyles.itemName, { color: tTheme.text }]}>
+                                                {item.description}
+                                            </Text>
+                                            <Text style={[localStyles.itemNumber, { color: tTheme.textSecondary }]}>
+                                                Article #{index + 1}
+                                            </Text>
+                                        </View>
                                         <TouchableOpacity
                                             onPress={() => handleRemoveItem(index)}
-                                            style={localStyles.removeButton}
+                                            style={[localStyles.removeButton, { backgroundColor: '#EF444415' }]}
                                         >
                                             <Ionicons name="trash-outline" size={20} color="#EF4444" />
                                         </TouchableOpacity>
-                                    )}
-                                </View>
-
-                                <FormInput
-                                    label="Description"
-                                    value={item.description}
-                                    onChangeText={(val) => handleItemChange(index, 'description', val)}
-                                    placeholder="Description de l'article"
-                                    icon="document-text"
-                                    multiline
-                                    theme={theme}
-                                />
-
-                                <View style={localStyles.itemRow}>
-                                    <View style={{ flex: 1, marginRight: 8 }}>
-                                        <FormInput
-                                            label="Quantité"
-                                            value={item.quantity}
-                                            onChangeText={(val) => handleItemChange(index, 'quantity', val)}
-                                            placeholder="1"
-                                            icon="cube"
-                                            keyboardType="numeric"
-                                            theme={theme}
-                                        />
                                     </View>
-                                    <View style={{ flex: 1, marginLeft: 8 }}>
-                                        <FormInput
-                                            label="Prix unitaire"
-                                            value={item.unitPrice}
-                                            onChangeText={(val) => handleItemChange(index, 'unitPrice', val)}
-                                            placeholder="0.000"
-                                            icon="pricetag"
-                                            keyboardType="numeric"
-                                            theme={theme}
-                                        />
+
+                                    <View style={localStyles.itemRow}>
+                                        <View style={{ flex: 1, marginRight: 8 }}>
+                                            <FormInput
+                                                label="Quantité"
+                                                value={String(item.quantity)}
+                                                onChangeText={(val) => handleItemChange(index, 'quantity', parseFloat(val) || 1)}
+                                                placeholder="1"
+                                                icon="cube"
+                                                keyboardType="numeric"
+                                                theme={theme}
+                                            />
+                                        </View>
+                                        <View style={{ flex: 1, marginLeft: 8 }}>
+                                            <FormInput
+                                                label="Prix unitaire"
+                                                value={String(item.unitPrice)}
+                                                onChangeText={(val) => handleItemChange(index, 'unitPrice', parseFloat(val) || 0)}
+                                                placeholder="0.000"
+                                                icon="pricetag"
+                                                keyboardType="numeric"
+                                                theme={theme}
+                                            />
+                                        </View>
+                                    </View>
+
+                                    <View style={[localStyles.subtotal, { backgroundColor: tTheme.primary + '15' }]}>
+                                        <Text style={[localStyles.subtotalText, { color: tTheme.primary }]}>
+                                            Sous-total: {((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)).toFixed(3)} TND
+                                        </Text>
                                     </View>
                                 </View>
-
-                                <View style={[localStyles.subtotal, { backgroundColor: tTheme.primarySoft }]}>
-                                    <Text style={[localStyles.subtotalText, { color: tTheme.primary }]}>
-                                        Sous-total: {((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)).toFixed(3)} TND
-                                    </Text>
-                                </View>
-                            </View>
-                        ))}
+                            ))
+                        )}
                     </FormCard>
 
                     {/* Total Summary */}
@@ -324,6 +405,85 @@ export default function CreateQuoteScreen({ navigation }) {
                     </FormActions>
                 </ScrollView>
             </ModernFormModal>
+
+            {/* Article Selection Modal */}
+            <Modal
+                visible={showArticleModal}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setShowArticleModal(false)}
+            >
+                <View style={localStyles.modalOverlay}>
+                    <View style={[localStyles.modalContent, { backgroundColor: tTheme.card }]}>
+                        <View style={[localStyles.modalHeader, { borderBottomColor: tTheme.border }]}>
+                            <Text style={[localStyles.modalTitle, { color: tTheme.text }]}>
+                                Sélectionner un article
+                            </Text>
+                            <TouchableOpacity
+                                onPress={() => setShowArticleModal(false)}
+                                style={localStyles.closeButton}
+                            >
+                                <Ionicons name="close" size={24} color={tTheme.text} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={localStyles.modalBody}>
+                            <ModernSearchBar
+                                value={articleSearchQuery}
+                                onChangeText={setArticleSearchQuery}
+                                placeholder="Rechercher un article..."
+                                theme={theme}
+                            />
+
+                            {loadingArticles ? (
+                                <View style={localStyles.loadingContainer}>
+                                    <ActivityIndicator size="large" color={tTheme.primary} />
+                                </View>
+                            ) : (
+                                <ScrollView style={localStyles.articlesList}>
+                                    {filteredAvailableArticles.length === 0 ? (
+                                        <View style={localStyles.emptyState}>
+                                            <Ionicons name="cube-outline" size={48} color={tTheme.textSecondary} />
+                                            <Text style={[localStyles.emptyText, { color: tTheme.textSecondary }]}>
+                                                Aucun article disponible
+                                            </Text>
+                                        </View>
+                                    ) : (
+                                        filteredAvailableArticles.map((article) => (
+                                            <TouchableOpacity
+                                                key={article.id}
+                                                style={[localStyles.articleItem, { 
+                                                    backgroundColor: tTheme.background,
+                                                    borderColor: tTheme.border
+                                                }]}
+                                                onPress={() => handleAddArticle(article)}
+                                            >
+                                                <View style={[localStyles.articleIcon, { backgroundColor: tTheme.primary + '15' }]}>
+                                                    <Ionicons name="cube" size={24} color={tTheme.primary} />
+                                                </View>
+                                                <View style={localStyles.articleInfo}>
+                                                    <Text style={[localStyles.articleName, { color: tTheme.text }]}>
+                                                        {article.name}
+                                                    </Text>
+                                                    {article.reference && (
+                                                        <Text style={[localStyles.articleReference, { color: tTheme.textSecondary }]}>
+                                                            Réf: {article.reference}
+                                                        </Text>
+                                                    )}
+                                                    <Text style={[localStyles.articlePrice, { color: tTheme.primary }]}>
+                                                        {parseFloat(article.price || 0).toFixed(3)} TND
+                                                    </Text>
+                                                </View>
+                                                <Ionicons name="add-circle" size={28} color={tTheme.primary} />
+                                            </TouchableOpacity>
+                                        ))
+                                    )}
+                                </ScrollView>
+                            )}
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </>
     );
 }
@@ -357,40 +517,67 @@ const localStyles = StyleSheet.create({
         shadowOpacity: 0.2,
         shadowRadius: 3,
     },
+    emptyState: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 40,
+    },
+    emptyText: {
+        fontSize: 16,
+        marginTop: 12,
+        marginBottom: 20,
+    },
+    emptyButton: {
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 10,
+    },
+    emptyButtonText: {
+        color: '#FFFFFF',
+        fontSize: 15,
+        fontWeight: '600',
+    },
     itemCard: {
         borderWidth: 1,
         borderRadius: 12,
         padding: 16,
-        marginBottom: 16,
+        marginBottom: 12,
     },
     itemHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 16,
+        alignItems: 'flex-start',
+        marginBottom: 12,
+    },
+    itemName: {
+        fontSize: 16,
+        fontWeight: '700',
+        marginBottom: 4,
     },
     itemNumber: {
-        fontSize: 13,
-        fontWeight: '600',
+        fontSize: 12,
+        fontWeight: '500',
         textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
     removeButton: {
-        padding: 4,
+        padding: 8,
+        borderRadius: 8,
     },
     itemRow: {
         flexDirection: 'row',
         alignItems: 'flex-end',
+        marginBottom: 8,
     },
     subtotal: {
-        marginTop: 12,
+        marginTop: 8,
         padding: 12,
         borderRadius: 8,
         alignItems: 'center',
     },
     subtotalText: {
-        fontSize: 16,
-        fontWeight: '600',
+        fontSize: 15,
+        fontWeight: '700',
     },
     summaryCard: {
         borderWidth: 1,
@@ -409,6 +596,80 @@ const localStyles = StyleSheet.create({
     },
     summaryValue: {
         fontSize: 22,
+        fontWeight: '700',
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        maxHeight: '80%',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        elevation: 10,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+        borderBottomWidth: 1,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+    },
+    closeButton: {
+        padding: 4,
+    },
+    modalBody: {
+        padding: 20,
+        flex: 1,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 40,
+    },
+    articlesList: {
+        marginTop: 16,
+    },
+    articleItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        borderRadius: 12,
+        borderWidth: 1,
+        marginBottom: 12,
+    },
+    articleIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    articleInfo: {
+        flex: 1,
+    },
+    articleName: {
+        fontSize: 16,
+        fontWeight: '600',
+        marginBottom: 4,
+    },
+    articleReference: {
+        fontSize: 13,
+        marginBottom: 4,
+    },
+    articlePrice: {
+        fontSize: 15,
         fontWeight: '700',
     },
 });

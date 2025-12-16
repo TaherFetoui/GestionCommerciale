@@ -2,7 +2,6 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import React, { useCallback, useLayoutEffect, useState } from 'react';
 import {
-    Alert,
     Modal,
     RefreshControl,
     ScrollView,
@@ -10,7 +9,7 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 import {
     ModernActionButton,
@@ -19,6 +18,7 @@ import {
     ModernStatusBadge,
     ModernTable,
 } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -52,6 +52,7 @@ export default function StockScreen() {
     const [formStockQuantity, setFormStockQuantity] = useState('0');
     const [formDescription, setFormDescription] = useState('');
     const [saveLoading, setSaveLoading] = useState(false);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     const { theme, language, user } = useAuth();
     const tTheme = themes[theme];
@@ -66,7 +67,7 @@ export default function StockScreen() {
             .order('name');
         
         if (error) {
-            Alert.alert(t.error, error.message);
+            setToast({ visible: true, message: error.message, type: 'error' });
         } else {
             setItems(data || []);
             setFilteredItems(data || []);
@@ -128,9 +129,9 @@ export default function StockScreen() {
             .eq('id', itemToDelete.id);
 
         if (error) {
-            Alert.alert(t.error, error.message);
+            setToast({ visible: true, message: error.message, type: 'error' });
         } else {
-            Alert.alert(t.success, t.articleDeleted);
+            setToast({ visible: true, message: t.articleDeleted, type: 'success' });
             setDeleteModalVisible(false);
             setItemToDelete(null);
             fetchItems();
@@ -140,7 +141,7 @@ export default function StockScreen() {
     // Save new article
     const handleSaveNewArticle = useCallback(async () => {
         if (!formName.trim()) {
-            Alert.alert(t.error, t.articleNameRequired);
+            setToast({ visible: true, message: t.articleNameRequired, type: 'warning' });
             return;
         }
 
@@ -161,9 +162,9 @@ export default function StockScreen() {
         setSaveLoading(false);
 
         if (error) {
-            Alert.alert(t.error, error.message);
+            setToast({ visible: true, message: error.message, type: 'error' });
         } else {
-            Alert.alert(t.success, t.articleCreated);
+            setToast({ visible: true, message: t.articleCreated, type: 'success' });
             setCreateModalVisible(false);
             fetchItems();
         }
@@ -172,7 +173,7 @@ export default function StockScreen() {
     // Update existing article
     const handleUpdateArticle = useCallback(async () => {
         if (!formName.trim()) {
-            Alert.alert(t.error, t.articleNameRequired);
+            setToast({ visible: true, message: t.articleNameRequired, type: 'warning' });
             return;
         }
 
@@ -193,9 +194,9 @@ export default function StockScreen() {
         setSaveLoading(false);
 
         if (error) {
-            Alert.alert(t.error, error.message);
+            setToast({ visible: true, message: error.message, type: 'error' });
         } else {
-            Alert.alert(t.success, t.articleUpdated);
+            setToast({ visible: true, message: t.articleUpdated, type: 'success' });
             setEditModalVisible(false);
             fetchItems();
         }
@@ -283,7 +284,7 @@ export default function StockScreen() {
 
     const handleSaveAdjustment = async () => {
         if (!adjustmentQuantity || parseFloat(adjustmentQuantity) <= 0) {
-            Alert.alert(t.error, t.enterValidQuantity);
+            setToast({ visible: true, message: t.enterValidQuantity, type: 'warning' });
             return;
         }
 
@@ -292,7 +293,7 @@ export default function StockScreen() {
         const newStock = adjustmentType === 'add' ? currentStock + quantity : currentStock - quantity;
 
         if (newStock < 0) {
-            Alert.alert(t.error, t.stockCannotBeNegative);
+            setToast({ visible: true, message: t.stockCannotBeNegative, type: 'warning' });
             return;
         }
 
@@ -303,7 +304,7 @@ export default function StockScreen() {
             .eq('id', selectedItem.id);
 
         if (updateError) {
-            Alert.alert(t.error, updateError.message);
+            setToast({ visible: true, message: updateError.message, type: 'error' });
             return;
         }
 
@@ -323,7 +324,7 @@ export default function StockScreen() {
             console.error('Error recording movement:', movementError);
         }
 
-        Alert.alert(t.success, t.stockUpdated);
+        setToast({ visible: true, message: t.stockUpdated, type: 'success' });
         setAdjustModalVisible(false);
         fetchItems();
     };
@@ -362,38 +363,62 @@ export default function StockScreen() {
             flex: 1,
             render: (row) => {
                 const status = getStockStatus(row.stock_quantity || 0);
-                return <ModernStatusBadge status={status} theme={theme} />;
+                const statusConfig = {
+                    'out_of_stock': { label: 'Rupture', variant: 'error' },
+                    'low_stock': { label: 'Faible', variant: 'warning' },
+                    'in_stock': { label: 'Disponible', variant: 'success' },
+                };
+                const config = statusConfig[status] || { label: 'N/A', variant: 'default' };
+                return <ModernStatusBadge label={config.label} variant={config.variant} />;
             },
         },
         {
             key: 'actions',
             label: 'Actions',
-            flex: 2,
+            flex: 1.5,
             render: (row) => (
                 <View style={localStyles.actionsContainer}>
                     <TouchableOpacity
-                        style={[localStyles.actionIconButton, { backgroundColor: tTheme.primarySoft }]}
-                        onPress={() => handleShowDetails(row)}
+                        style={[localStyles.actionButton, { backgroundColor: tTheme.primary + '15' }]}
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            handleShowDetails(row);
+                        }}
                     >
-                        <Ionicons name="eye" size={18} color={tTheme.primary} />
+                        <Ionicons name="eye-outline" size={18} color={tTheme.primary} />
                     </TouchableOpacity>
                     <TouchableOpacity
-                        style={[localStyles.actionIconButton, { backgroundColor: tTheme.infoSoft }]}
-                        onPress={() => handleAdjustStock(row)}
+                        style={[localStyles.actionButton, { backgroundColor: tTheme.info + '15' }]}
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            handleAdjustStock(row);
+                        }}
                     >
-                        <Ionicons name="swap-horizontal" size={18} color={tTheme.info} />
+                        <Ionicons name="swap-horizontal-outline" size={18} color={tTheme.info} />
                     </TouchableOpacity>
                     <TouchableOpacity
-                        style={[localStyles.actionIconButton, { backgroundColor: tTheme.successSoft }]}
-                        onPress={() => handleEditArticle(row)}
+                        style={[localStyles.actionButton, { backgroundColor: tTheme.success + '15' }]}
+                        onPress={(e) => {
+                            e.stopPropagation();
+                            handleEditArticle(row);
+                        }}
                     >
-                        <Ionicons name="pencil" size={18} color={tTheme.success} />
+                        <Ionicons name="pencil-outline" size={18} color={tTheme.success} />
                     </TouchableOpacity>
                     <TouchableOpacity
-                        style={[localStyles.actionIconButton, { backgroundColor: tTheme.errorSoft }]}
-                        onPress={() => handleDeleteArticle(row)}
+                        activeOpacity={0.7}
+                        style={[localStyles.deleteButton, { 
+                            backgroundColor: '#FEE2E2',
+                            borderColor: '#EF4444'
+                        }]}
+                        onPress={(e) => {
+                            if (e && e.stopPropagation) {
+                                e.stopPropagation();
+                            }
+                            handleDeleteArticle(row);
+                        }}
                     >
-                        <Ionicons name="trash" size={18} color={tTheme.error} />
+                        <Ionicons name="trash" size={18} color="#DC2626" />
                     </TouchableOpacity>
                 </View>
             ),
@@ -999,6 +1024,14 @@ export default function StockScreen() {
                     </View>
                 </View>
             </Modal>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }
@@ -1073,13 +1106,27 @@ const localStyles = StyleSheet.create({
     actionsContainer: {
         flexDirection: 'row',
         gap: 8,
+        alignItems: 'center',
     },
-    actionIconButton: {
+    actionButton: {
         width: 36,
         height: 36,
         borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    deleteButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        shadowColor: '#DC2626',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        elevation: 2,
     },
     modalBackground: {
         flex: 1,

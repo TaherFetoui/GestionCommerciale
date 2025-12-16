@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ModernStatusBadge } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -13,6 +14,7 @@ export default function QuoteDetailsScreen({ route, navigation }) {
     const [client, setClient] = useState(null);
     const [loading, setLoading] = useState(true);
     const [statusMenuVisible, setStatusMenuVisible] = useState(false);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     const { theme, language, user } = useAuth();
     const tTheme = themes[theme];
@@ -39,7 +41,7 @@ export default function QuoteDetailsScreen({ route, navigation }) {
 
             if (error) {
                 console.error('Error fetching quote:', error);
-                Alert.alert('Erreur', 'Impossible de charger les détails du devis');
+                setToast({ visible: true, message: 'Impossible de charger les détails du devis', type: 'error' });
             } else if (data) {
                 if (data.client_id) {
                     const { data: clientData, error: clientError } = await supabase
@@ -68,16 +70,16 @@ export default function QuoteDetailsScreen({ route, navigation }) {
                 .eq('id', quote_id);
 
             if (error) {
-                Alert.alert('Erreur', 'Impossible de mettre à jour le statut');
+                setToast({ visible: true, message: 'Impossible de mettre à jour le statut', type: 'error' });
                 console.error(error);
             } else {
                 setQuote(prev => ({ ...prev, status: newStatus }));
                 setStatusMenuVisible(false);
-                Alert.alert('Succès', 'Statut mis à jour avec succès');
+                setToast({ visible: true, message: 'Statut mis à jour avec succès', type: 'success' });
             }
         } catch (error) {
             console.error('Status update error:', error);
-            Alert.alert('Erreur', 'Une erreur est survenue');
+            setToast({ visible: true, message: 'Une erreur est survenue', type: 'error' });
         }
     }, [quote_id]);
 
@@ -274,6 +276,14 @@ export default function QuoteDetailsScreen({ route, navigation }) {
                     </View>
                 )}
             </ScrollView>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }

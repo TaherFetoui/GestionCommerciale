@@ -18,6 +18,7 @@ import {
     ModernStatusBadge,
     ModernTable,
 } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -38,6 +39,7 @@ export default function BankAccountsScreen() {
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [selectedAccount, setSelectedAccount] = useState(null);
     const [accountToDelete, setAccountToDelete] = useState(null);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     // Form states
     const [formAccountType, setFormAccountType] = useState('bank');
@@ -184,9 +186,10 @@ export default function BankAccountsScreen() {
             .eq('id', accountToDelete.id);
         if (error) {
             console.error('Error deleting account:', error);
-            alert('Erreur lors de la suppression');
+            setToast({ visible: true, message: 'Erreur lors de la suppression', type: 'error' });
         } else {
             setAccounts(prevAccounts => prevAccounts.filter(a => a.id !== accountToDelete.id));
+            setToast({ visible: true, message: 'Compte supprimé avec succès', type: 'success' });
         }
         setAccountToDelete(null);
     }, [accountToDelete]);
@@ -198,7 +201,7 @@ export default function BankAccountsScreen() {
 
     const handleSaveNewAccount = useCallback(async () => {
         if (!formAccountName) {
-            alert('Veuillez remplir le nom du compte');
+            setToast({ visible: true, message: 'Veuillez remplir le nom du compte', type: 'warning' });
             return;
         }
         setSaveLoading(true);
@@ -220,9 +223,10 @@ export default function BankAccountsScreen() {
         }]);
         if (error) {
             console.error('Error creating account:', error);
-            alert('Erreur lors de la création');
+            setToast({ visible: true, message: 'Erreur lors de la création', type: 'error' });
         } else {
             setCreateModalVisible(false);
+            setToast({ visible: true, message: 'Compte créé avec succès', type: 'success' });
             await fetchAccounts();
         }
         setSaveLoading(false);
@@ -251,10 +255,11 @@ export default function BankAccountsScreen() {
             .eq('id', selectedAccount.id);
         if (error) {
             console.error('Error updating account:', error);
-            alert('Erreur lors de la modification');
+            setToast({ visible: true, message: 'Erreur lors de la modification', type: 'error' });
         } else {
             setEditModalVisible(false);
             setSelectedAccount(null);
+            setToast({ visible: true, message: 'Compte modifié avec succès', type: 'success' });
             await fetchAccounts();
         }
         setSaveLoading(false);
@@ -583,6 +588,14 @@ export default function BankAccountsScreen() {
                     </View>
                 </View>
             </Modal>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }

@@ -43,7 +43,7 @@ export default function CreateDeliveryNoteScreen({ navigation }) {
                 
             if (clientsError) {
                 console.error('Error fetching clients:', clientsError);
-                Alert.alert('Erreur', clientsError.message);
+                setToast({ visible: true, message: clientsError.message, type: 'error' });
             } else {
                 setClients(clientsData || []);
             }
@@ -56,7 +56,7 @@ export default function CreateDeliveryNoteScreen({ navigation }) {
                 
             if (articlesError) {
                 console.error('Error fetching articles:', articlesError);
-                Alert.alert('Erreur', articlesError.message);
+                setToast({ visible: true, message: articlesError.message, type: 'error' });
             } else {
                 setArticles(articlesData || []);
             }
@@ -111,16 +111,18 @@ export default function CreateDeliveryNoteScreen({ navigation }) {
         if (lineItems.length > 1) {
             setLineItems(lineItems.filter((_, i) => i !== index));
         } else {
-            Alert.alert('Information', 'Vous devez avoir au moins un article.');
+            setToast({ visible: true, message: 'Vous devez avoir au moins un article.', type: 'info' });
         }
     };
 
     const handleSave = async () => {
         if (!selectedClientId) {
-            return Alert.alert('Champ requis', 'Veuillez sélectionner un client.');
+            setToast({ visible: true, message: 'Veuillez sélectionner un client.', type: 'warning' });
+            return;
         }
         if (!noteNumber.trim()) {
-            return Alert.alert('Champ requis', 'Veuillez entrer un numéro de bon.');
+            setToast({ visible: true, message: 'Veuillez entrer un numéro de bon.', type: 'warning' });
+            return;
         }
         
         const validItems = lineItems
@@ -132,7 +134,8 @@ export default function CreateDeliveryNoteScreen({ navigation }) {
             }));
         
         if (validItems.length === 0) {
-            return Alert.alert('Articles requis', 'Veuillez sélectionner au moins un article.');
+            setToast({ visible: true, message: 'Veuillez sélectionner au moins un article.', type: 'warning' });
+            return;
         }
         
         setLoading(true);

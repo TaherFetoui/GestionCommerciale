@@ -4,6 +4,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useCallback, useLayoutEffect, useState } from 'react';
 import { Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { ModernActionButton, ModernFilterChip, ModernSearchBar, ModernStatusBadge, ModernTable } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { printFinanceDocument } from '../../services/pdfGenerator';
@@ -24,6 +25,7 @@ export default function ClientPaymentOrdersScreen() {
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [orderToDelete, setOrderToDelete] = useState(null);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     const [formOrderNumber, setFormOrderNumber] = useState('');
     const [formClient, setFormClient] = useState('');
@@ -133,9 +135,10 @@ export default function ClientPaymentOrdersScreen() {
         setDeleteModalVisible(false);
         const { error } = await supabase.from('client_payment_orders').delete().eq('id', orderToDelete.id);
         if (error) {
-            alert('Erreur lors de la suppression');
+            setToast({ visible: true, message: 'Erreur lors de la suppression', type: 'error' });
         } else {
             setOrders(prevOrders => prevOrders.filter(o => o.id !== orderToDelete.id));
+            setToast({ visible: true, message: 'Ordre de paiement supprimé avec succès', type: 'success' });
         }
         setOrderToDelete(null);
     }, [orderToDelete]);
@@ -146,7 +149,7 @@ export default function ClientPaymentOrdersScreen() {
     }, []);
 
     const handleSaveNewOrder = useCallback(async () => {
-        if (!formClient || !formAmount) { alert('Champs obligatoires manquants'); return; }
+        if (!formClient || !formAmount) { setToast({ visible: true, message: 'Champs obligatoires manquants', type: 'warning' }); return; }
         setSaveLoading(true);
         const { error } = await supabase.from('client_payment_orders').insert([{
             order_number: formOrderNumber,
@@ -160,8 +163,8 @@ export default function ClientPaymentOrdersScreen() {
             note: formNote,
             created_by: user?.id,
         }]);
-        if (error) alert('Erreur');
-        else { setCreateModalVisible(false); await fetchOrders(); }
+        if (error) setToast({ visible: true, message: 'Erreur lors de la création', type: 'error' });
+        else { setCreateModalVisible(false); setToast({ visible: true, message: 'Ordre de paiement créé avec succès', type: 'success' }); await fetchOrders(); }
         setSaveLoading(false);
     }, [formOrderNumber, formClient, formAmount, formPaymentMethod, formBankAccount, formReceiptDate, formInvoiceRef, formStatus, formNote, user, fetchOrders]);
 
@@ -179,8 +182,8 @@ export default function ClientPaymentOrdersScreen() {
             status: formStatus,
             note: formNote,
         }).eq('id', selectedOrder.id);
-        if (error) alert('Erreur');
-        else { setEditModalVisible(false); setSelectedOrder(null); await fetchOrders(); }
+        if (error) setToast({ visible: true, message: 'Erreur lors de la modification', type: 'error' });
+        else { setEditModalVisible(false); setSelectedOrder(null); setToast({ visible: true, message: 'Ordre de paiement modifié avec succès', type: 'success' }); await fetchOrders(); }
         setSaveLoading(false);
     }, [selectedOrder, formOrderNumber, formClient, formAmount, formPaymentMethod, formBankAccount, formReceiptDate, formInvoiceRef, formStatus, formNote, fetchOrders]);
 
@@ -365,6 +368,14 @@ export default function ClientPaymentOrdersScreen() {
                     </View>
                 </View>
             </Modal>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }

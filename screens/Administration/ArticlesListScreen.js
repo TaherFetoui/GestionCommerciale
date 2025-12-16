@@ -6,6 +6,7 @@ import {
     ModernSearchBar,
     ModernTable,
 } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -22,6 +23,7 @@ export default function ArticlesListScreen() {
     const [articleToDelete, setArticleToDelete] = useState(null);
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [selectedArticle, setSelectedArticle] = useState(null);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
     const { theme, language } = useAuth();
     const tTheme = themes[theme];
     const t = translations[language];
@@ -31,7 +33,7 @@ export default function ArticlesListScreen() {
         setLoading(true);
         const { data, error } = await supabase.from('items').select('*').order('name');
         if (error) {
-            Alert.alert(t.error, error.message);
+            setToast({ visible: true, message: error.message, type: 'error' });
         } else {
             setArticles(data || []);
             setFilteredArticles(data || []);
@@ -92,13 +94,13 @@ export default function ArticlesListScreen() {
                 .eq('id', articleToDelete.id);
 
             if (error) {
-                Alert.alert(t.error, error.message);
+                setToast({ visible: true, message: error.message, type: 'error' });
             } else {
                 setArticles(prev => prev.filter(article => article.id !== articleToDelete.id));
-                Alert.alert('✓ Succès', 'Article supprimé avec succès');
+                setToast({ visible: true, message: 'Article supprimé avec succès', type: 'success' });
             }
         } catch (error) {
-            Alert.alert(t.error, 'Impossible de supprimer l\'article');
+            setToast({ visible: true, message: 'Impossible de supprimer l\'article', type: 'error' });
         }
         
         setArticleToDelete(null);
@@ -111,7 +113,7 @@ export default function ArticlesListScreen() {
 
     const handleUpdateArticle = useCallback(async () => {
         if (!selectedArticle?.name) {
-            Alert.alert(t.error, 'Le nom est requis');
+            setToast({ visible: true, message: 'Le nom est requis', type: 'warning' });
             return;
         }
 
@@ -127,14 +129,14 @@ export default function ArticlesListScreen() {
                 .eq('id', selectedArticle.id);
 
             if (error) {
-                Alert.alert(t.error, error.message);
+                setToast({ visible: true, message: error.message, type: 'error' });
             } else {
-                Alert.alert('✓ Succès', 'Article modifié avec succès');
+                setToast({ visible: true, message: 'Article modifié avec succès', type: 'success' });
                 setEditModalVisible(false);
                 fetchArticles();
             }
         } catch (error) {
-            Alert.alert(t.error, 'Impossible de modifier l\'article');
+            setToast({ visible: true, message: 'Impossible de modifier l\'article', type: 'error' });
         }
     }, [selectedArticle, t.error, fetchArticles]);
 
@@ -348,6 +350,14 @@ export default function ArticlesListScreen() {
                     </View>
                 </View>
             </Modal>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }

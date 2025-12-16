@@ -3,6 +3,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useCallback, useLayoutEffect, useState } from 'react';
 import { Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { ModernActionButton, ModernFilterChip, ModernSearchBar, ModernStatusBadge, ModernTable } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { printFinanceDocument } from '../../services/pdfGenerator';
@@ -22,6 +23,7 @@ export default function SupplierPaymentOrdersScreen() {
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState(null);
     const [orderToDelete, setOrderToDelete] = useState(null);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     const [formOrderNumber, setFormOrderNumber] = useState('');
     const [formSupplier, setFormSupplier] = useState('');
@@ -128,9 +130,10 @@ export default function SupplierPaymentOrdersScreen() {
         setDeleteModalVisible(false);
         const { error } = await supabase.from('supplier_payment_orders').delete().eq('id', orderToDelete.id);
         if (error) {
-            alert('Erreur lors de la suppression');
+            setToast({ visible: true, message: 'Erreur lors de la suppression', type: 'error' });
         } else {
             setOrders(prevOrders => prevOrders.filter(o => o.id !== orderToDelete.id));
+            setToast({ visible: true, message: 'Ordre de paiement supprimé avec succès', type: 'success' });
         }
         setOrderToDelete(null);
     }, [orderToDelete]);
@@ -142,7 +145,7 @@ export default function SupplierPaymentOrdersScreen() {
 
     const handleSaveNewOrder = useCallback(async () => {
         if (!formSupplier || !formAmount) {
-            alert('Veuillez remplir les champs obligatoires');
+            setToast({ visible: true, message: 'Veuillez remplir les champs obligatoires', type: 'warning' });
             return;
         }
         setSaveLoading(true);
@@ -158,10 +161,12 @@ export default function SupplierPaymentOrdersScreen() {
             note: formNote,
             created_by: user?.id,
         }]);
-        if (error) alert('Erreur');
-        else {
+        if (error) {
+            setToast({ visible: true, message: 'Erreur lors de la création', type: 'error' });
+        } else {
             setCreateModalVisible(false);
             await fetchOrders();
+            setToast({ visible: true, message: 'Ordre de paiement créé avec succès', type: 'success' });
         }
         setSaveLoading(false);
     }, [formOrderNumber, formSupplier, formAmount, formPaymentMethod, formBankAccount, formPaymentDate, formDueDate, formStatus, formNote, user, fetchOrders]);
@@ -180,11 +185,13 @@ export default function SupplierPaymentOrdersScreen() {
             status: formStatus,
             note: formNote,
         }).eq('id', selectedOrder.id);
-        if (error) alert('Erreur');
-        else {
+        if (error) {
+            setToast({ visible: true, message: 'Erreur lors de la modification', type: 'error' });
+        } else {
             setEditModalVisible(false);
             setSelectedOrder(null);
             await fetchOrders();
+            setToast({ visible: true, message: 'Ordre de paiement modifié avec succès', type: 'success' });
         }
         setSaveLoading(false);
     }, [selectedOrder, formOrderNumber, formSupplier, formAmount, formPaymentMethod, formBankAccount, formPaymentDate, formDueDate, formStatus, formNote, fetchOrders]);
@@ -386,6 +393,14 @@ export default function SupplierPaymentOrdersScreen() {
                     </View>
                 </View>
             </Modal>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }

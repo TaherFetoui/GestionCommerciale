@@ -14,6 +14,7 @@ import {
     View
 } from 'react-native';
 import { themes, translations } from '../../constants/AppConfig';
+import Toast from '../../components/Toast';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { getGlobalStyles } from '../../styles/GlobalStyles';
@@ -62,6 +63,7 @@ export default function CompanyInfoScreen() {
     const [editingSection, setEditingSection] = useState(null);
     const [isConfirmModalVisible, setConfirmModalVisible] = useState(false);
     const [logoUri, setLogoUri] = useState(null);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     const fetchCompanyInfo = useCallback(async () => {
         if (!user) return;
@@ -97,7 +99,7 @@ export default function CompanyInfoScreen() {
         // Request permission
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-            Alert.alert('Permission requise', 'Nous avons besoin de la permission pour accéder à vos photos.');
+            setToast({ visible: true, message: 'Nous avons besoin de la permission pour accéder à vos photos.', type: 'warning' });
             return;
         }
 
@@ -131,9 +133,9 @@ export default function CompanyInfoScreen() {
         const { error } = await supabase.from('company_info').upsert({ ...draftCompany, user_id: user.id }, { onConflict: 'user_id' });
         
         if (error) {
-            Alert.alert(t.error, error.message);
+            setToast({ visible: true, message: error.message, type: 'error' });
         } else {
-            Alert.alert(t.success, t.infoSaved);
+            setToast({ visible: true, message: t.infoSaved, type: 'success' });
             setCompany({ ...draftCompany }); // Update main state
             handleCancel();
             fetchCompanyInfo(); // Re-fetch for consistency
@@ -233,6 +235,8 @@ export default function CompanyInfoScreen() {
                         <TextInput style={styles.input} value={draftCompany.name} onChangeText={(val) => handleChange('name', val)} />
                         <Text style={styles.label}>{t.matriculeFiscale}</Text>
                         <TextInput style={styles.input} value={draftCompany.tax_id} onChangeText={(val) => handleChange('tax_id', val)} />
+                        <Text style={styles.label}>RIB Bancaire</Text>
+                        <TextInput style={styles.input} value={draftCompany.rib} onChangeText={(val) => handleChange('rib', val)} placeholder="Relevé d'Identité Bancaire" />
                     </>
                 ) : (
                     <>
@@ -240,6 +244,8 @@ export default function CompanyInfoScreen() {
                         <Text style={[localStyles.infoText, {color: tTheme.text}]}>{company.name || '-'}</Text>
                         <Text style={localStyles.infoLabel}>{t.matriculeFiscale}</Text>
                         <Text style={[localStyles.infoText, {color: tTheme.text}]}>{company.tax_id || '-'}</Text>
+                        <Text style={localStyles.infoLabel}>RIB Bancaire</Text>
+                        <Text style={[localStyles.infoText, {color: tTheme.text}]}>{company.rib || '-'}</Text>
                     </>
                 )}
             </InfoSection>
@@ -258,6 +264,8 @@ export default function CompanyInfoScreen() {
                         <TextInput style={styles.input} value={draftCompany.email} onChangeText={(val) => handleChange('email', val)} keyboardType="email-address"/>
                         <Text style={styles.label}>Téléphone</Text>
                         <TextInput style={styles.input} value={draftCompany.phone} onChangeText={(val) => handleChange('phone', val)} keyboardType="phone-pad" />
+                        <Text style={styles.label}>Site Web</Text>
+                        <TextInput style={styles.input} value={draftCompany.website} onChangeText={(val) => handleChange('website', val)} keyboardType="url" placeholder="https://www.example.com" />
                     </>
                 ) : (
                     <>
@@ -265,6 +273,41 @@ export default function CompanyInfoScreen() {
                         <Text style={[localStyles.infoText, {color: tTheme.text}]}>{company.email || '-'}</Text>
                         <Text style={localStyles.infoLabel}>Téléphone</Text>
                         <Text style={[localStyles.infoText, {color: tTheme.text}]}>{company.phone || '-'}</Text>
+                        <Text style={localStyles.infoLabel}>Site Web</Text>
+                        <Text style={[localStyles.infoText, {color: tTheme.text}]}>{company.website || '-'}</Text>
+                    </>
+                )}
+            </InfoSection>
+
+            <InfoSection
+                title="Adresse"
+                theme={theme}
+                isEditing={editingSection === 'address'}
+                onEdit={() => handleEdit('address')}
+                onCancel={handleCancel}
+                onSave={promptSave}
+            >
+                {editingSection === 'address' ? (
+                     <>
+                        <Text style={styles.label}>Adresse</Text>
+                        <TextInput style={styles.input} value={draftCompany.address} onChangeText={(val) => handleChange('address', val)} placeholder="Rue, numéro" />
+                        <Text style={styles.label}>Ville</Text>
+                        <TextInput style={styles.input} value={draftCompany.city} onChangeText={(val) => handleChange('city', val)} />
+                        <Text style={styles.label}>Code Postal</Text>
+                        <TextInput style={styles.input} value={draftCompany.postal_code} onChangeText={(val) => handleChange('postal_code', val)} keyboardType="numeric" />
+                        <Text style={styles.label}>Pays</Text>
+                        <TextInput style={styles.input} value={draftCompany.country} onChangeText={(val) => handleChange('country', val)} />
+                    </>
+                ) : (
+                    <>
+                        <Text style={localStyles.infoLabel}>Adresse</Text>
+                        <Text style={[localStyles.infoText, {color: tTheme.text}]}>{company.address || '-'}</Text>
+                        <Text style={localStyles.infoLabel}>Ville</Text>
+                        <Text style={[localStyles.infoText, {color: tTheme.text}]}>{company.city || '-'}</Text>
+                        <Text style={localStyles.infoLabel}>Code Postal</Text>
+                        <Text style={[localStyles.infoText, {color: tTheme.text}]}>{company.postal_code || '-'}</Text>
+                        <Text style={localStyles.infoLabel}>Pays</Text>
+                        <Text style={[localStyles.infoText, {color: tTheme.text}]}>{company.country || '-'}</Text>
                     </>
                 )}
             </InfoSection>
@@ -292,6 +335,14 @@ export default function CompanyInfoScreen() {
                     </View>
                 </View>
             </Modal>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
 
             </ScrollView>
         </View>

@@ -10,6 +10,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { useReporting } from '../../context/ReportingContext';
@@ -25,6 +26,7 @@ export default function ReportingScreen() {
     const [selectedType, setSelectedType] = useState('client');
     const [selectedId, setSelectedId] = useState('');
     const [loading, setLoading] = useState(false);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     const styles = getGlobalStyles(theme);
     const tTheme = themes[theme];
@@ -42,7 +44,7 @@ export default function ReportingScreen() {
             .order('name', { ascending: true });
 
         if (error) {
-            Alert.alert(t.error, error.message);
+            setToast({ visible: true, message: error.message, type: 'error' });
         } else {
             setClients(data || []);
         }
@@ -55,7 +57,7 @@ export default function ReportingScreen() {
             .order('name', { ascending: true });
 
         if (error) {
-            Alert.alert(t.error, error.message);
+            setToast({ visible: true, message: error.message, type: 'error' });
         } else {
             setSuppliers(data || []);
         }
@@ -73,10 +75,11 @@ export default function ReportingScreen() {
         console.log('selectedType:', selectedType);
         
         if (!selectedId) {
-            Alert.alert(
-                t.warning || 'Attention',
-                `Veuillez sélectionner un ${selectedType === 'client' ? 'client' : 'fournisseur'}`
-            );
+            setToast({ 
+                visible: true, 
+                message: `Veuillez sélectionner un ${selectedType === 'client' ? 'client' : 'fournisseur'}`, 
+                type: 'warning' 
+            });
             return;
         }
 
@@ -98,7 +101,7 @@ export default function ReportingScreen() {
             }
         } else {
             console.log('ERROR: selected is null/undefined');
-            Alert.alert('Erreur', 'Impossible de trouver l\'élément sélectionné');
+            setToast({ visible: true, message: 'Impossible de trouver l\'élément sélectionné', type: 'error' });
         }
     };
 
@@ -204,6 +207,14 @@ export default function ReportingScreen() {
                     </Text>
                 </TouchableOpacity>
             </View>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </ScrollView>
     );
 }

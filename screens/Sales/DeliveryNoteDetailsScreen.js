@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Picker } from '@react-native-picker/picker';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -18,6 +19,7 @@ export default function DeliveryNoteDetailsScreen({ route, navigation }) {
     const [client, setClient] = useState(null);
     const [loading, setLoading] = useState(true);
     const [updating, setUpdating] = useState(false);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     useEffect(() => {
         fetchNoteDetails();
@@ -34,7 +36,7 @@ export default function DeliveryNoteDetailsScreen({ route, navigation }) {
 
         if (error) {
             console.error('Error fetching delivery note:', error);
-            Alert.alert('Erreur', 'Impossible de charger le bon de livraison');
+            setToast({ visible: true, message: 'Impossible de charger le bon de livraison', type: 'error' });
             navigation.goBack();
         } else if (data) {
             setNote(data);
@@ -67,10 +69,10 @@ export default function DeliveryNoteDetailsScreen({ route, navigation }) {
 
         if (error) {
             console.error('Error updating status:', error);
-            Alert.alert('Erreur', 'Impossible de mettre à jour le statut');
+            setToast({ visible: true, message: 'Impossible de mettre à jour le statut', type: 'error' });
         } else {
             setNote({ ...note, status: newStatus });
-            Alert.alert('Succès', 'Statut mis à jour');
+            setToast({ visible: true, message: 'Statut mis à jour', type: 'success' });
         }
         setUpdating(false);
     };
@@ -299,6 +301,14 @@ export default function DeliveryNoteDetailsScreen({ route, navigation }) {
                     </View>
                 )}
             </View>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </ScrollView>
     );
 }

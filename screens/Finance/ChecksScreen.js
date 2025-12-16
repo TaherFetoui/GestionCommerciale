@@ -3,6 +3,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useCallback, useLayoutEffect, useState } from 'react';
 import { Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { ModernActionButton, ModernFilterChip, ModernSearchBar, ModernStatusBadge, ModernTable } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { printFinanceDocument } from '../../services/pdfGenerator';
@@ -22,6 +23,7 @@ export default function ChecksScreen() {
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [selectedCheck, setSelectedCheck] = useState(null);
     const [checkToDelete, setCheckToDelete] = useState(null);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     const [formCheckType, setFormCheckType] = useState('received');
     const [formCheckNumber, setFormCheckNumber] = useState('');
@@ -137,10 +139,11 @@ export default function ChecksScreen() {
         setDeleteModalVisible(false);
         setSaveLoading(true);
         const { error } = await supabase.from('checks').delete().eq('id', checkToDelete.id);
-        if (error) alert('Erreur lors de la suppression');
+        if (error) setToast({ visible: true, message: 'Erreur lors de la suppression', type: 'error' });
         else {
             setChecks(prev => prev.filter(check => check.id !== checkToDelete.id));
             setCheckToDelete(null);
+            setToast({ visible: true, message: 'Chèque supprimé avec succès', type: 'success' });
             await fetchChecks();
         }
         setSaveLoading(false);
@@ -153,7 +156,7 @@ export default function ChecksScreen() {
 
     const handleSaveNewCheck = useCallback(async () => {
         if (!formCheckNumber || !formAmount) {
-            alert('Veuillez remplir les champs obligatoires');
+            setToast({ visible: true, message: 'Veuillez remplir les champs obligatoires', type: 'warning' });
             return;
         }
         setSaveLoading(true);
@@ -170,9 +173,10 @@ export default function ChecksScreen() {
             note: formNote,
             created_by: user?.id,
         }]);
-        if (error) alert('Erreur lors de la création');
+        if (error) setToast({ visible: true, message: 'Erreur lors de la création', type: 'error' });
         else {
             setCreateModalVisible(false);
+            setToast({ visible: true, message: 'Chèque créé avec succès', type: 'success' });
             await fetchChecks();
         }
         setSaveLoading(false);
@@ -193,10 +197,11 @@ export default function ChecksScreen() {
             status: formStatus,
             note: formNote,
         }).eq('id', selectedCheck.id);
-        if (error) alert('Erreur lors de la modification');
+        if (error) setToast({ visible: true, message: 'Erreur lors de la modification', type: 'error' });
         else {
             setEditModalVisible(false);
             setSelectedCheck(null);
+            setToast({ visible: true, message: 'Chèque modifié avec succès', type: 'success' });
             await fetchChecks();
         }
         setSaveLoading(false);
@@ -428,6 +433,14 @@ export default function ChecksScreen() {
                     </View>
                 </View>
             </Modal>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }

@@ -107,10 +107,11 @@ export default function Toast({ visible, message, type = 'success', onHide, them
 const styles = StyleSheet.create({
     container: {
         position: 'absolute',
-        top: 50,
+        top: 120,
         left: 16,
         right: 16,
-        zIndex: 9999,
+        zIndex: 99999,
+        elevation: 999,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',

@@ -14,6 +14,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import Toast from '../components/Toast';
 import { themes, translations } from '../constants/AppConfig';
 import { useAuth } from '../context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
@@ -26,6 +27,7 @@ export default function LoginScreen() {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
     const { signIn, language } = useAuth();
     const { isMobile, width } = useResponsive();
     const t = translations[language];
@@ -89,7 +91,7 @@ export default function LoginScreen() {
 
     const handleLogin = async () => {
         if (!email || !password) {
-            Alert.alert(t.error, t.fillAllFields);
+            setToast({ visible: true, message: t.fillAllFields, type: 'warning' });
             return;
         }
         setLoading(true);
@@ -98,14 +100,14 @@ export default function LoginScreen() {
             console.log('Login attempt:', { data, error });
             if (error) {
                 console.error('Login error:', error);
-                Alert.alert(t.loginError, error.message || t.unexpectedError);
+                setToast({ visible: true, message: error.message || t.unexpectedError, type: 'error' });
             } else {
                 // Success - session is saved automatically
                 console.log('Login successful, session saved');
             }
         } catch (err) {
             console.error('Login exception:', err);
-            Alert.alert(t.error, t.unexpectedError);
+            setToast({ visible: true, message: t.unexpectedError, type: 'error' });
         } finally {
             setLoading(false);
         }
@@ -124,17 +126,17 @@ export default function LoginScreen() {
             
             if (error) {
                 if (error.message.includes('already registered')) {
-                    Alert.alert(t.error, `${t.userAlreadyExists}\n\n${t.use}:\n${t.email}: ${testEmail}\n${t.password}: ${testPassword}`);
+                    setToast({ visible: true, message: `${t.userAlreadyExists}\n${t.email}: ${testEmail}\n${t.password}: ${testPassword}`, type: 'info' });
                 } else {
-                    Alert.alert(t.error, error.message);
+                    setToast({ visible: true, message: error.message, type: 'error' });
                 }
             } else {
-                Alert.alert(t.success, `${t.userCreated}\n\n${t.email}: ${testEmail}\n${t.password}: ${testPassword}`);
+                setToast({ visible: true, message: `${t.userCreated}\n${t.email}: ${testEmail}`, type: 'success' });
                 setEmail(testEmail);
                 setPassword(testPassword);
             }
         } catch (err) {
-            Alert.alert(t.error, err.message);
+            setToast({ visible: true, message: err.message, type: 'error' });
         }
     };
 
@@ -344,6 +346,14 @@ export default function LoginScreen() {
                     </Animated.View>
                 </View>
             </KeyboardAvoidingView>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme="dark"
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }

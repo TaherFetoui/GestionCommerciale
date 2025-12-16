@@ -3,6 +3,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useCallback, useLayoutEffect, useState } from 'react';
 import { Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { ModernActionButton, ModernFilterChip, ModernSearchBar, ModernStatusBadge, ModernTable } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { themes } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -20,6 +21,7 @@ export default function CashSessionScreen() {
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [selectedSession, setSelectedSession] = useState(null);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     const [formSessionNumber, setFormSessionNumber] = useState('');
     const [formCashBoxName, setFormCashBoxName] = useState('');
@@ -101,13 +103,22 @@ export default function CashSessionScreen() {
         if (!selectedSession) return;
         setSaveLoading(true);
         const { error } = await supabase.from('cash_sessions').delete().eq('id', selectedSession.id);
-        if (error) alert('Erreur');
-        else { setDeleteModalVisible(false); setSelectedSession(null); await fetchSessions(); }
+        if (error) {
+            setToast({ visible: true, message: 'Erreur lors de la suppression', type: 'error' });
+        } else {
+            setDeleteModalVisible(false);
+            setSelectedSession(null);
+            await fetchSessions();
+            setToast({ visible: true, message: 'Session de caisse supprimée avec succès', type: 'success' });
+        }
         setSaveLoading(false);
     }, [selectedSession, fetchSessions]);
 
     const handleSaveNewSession = useCallback(async () => {
-        if (!formCashBoxName || !formOpeningBalance) { alert('Champs obligatoires manquants'); return; }
+        if (!formCashBoxName || !formOpeningBalance) {
+            setToast({ visible: true, message: 'Champs obligatoires manquants', type: 'warning' });
+            return;
+        }
         setSaveLoading(true);
         const { error } = await supabase.from('cash_sessions').insert([{
             session_number: formSessionNumber,
@@ -120,8 +131,13 @@ export default function CashSessionScreen() {
             note: formNote,
             created_by: user?.id,
         }]);
-        if (error) alert('Erreur');
-        else { setCreateModalVisible(false); await fetchSessions(); }
+        if (error) {
+            setToast({ visible: true, message: 'Erreur lors de la création', type: 'error' });
+        } else {
+            setCreateModalVisible(false);
+            await fetchSessions();
+            setToast({ visible: true, message: 'Session de caisse créée avec succès', type: 'success' });
+        }
         setSaveLoading(false);
     }, [formSessionNumber, formCashBoxName, formOpeningBalance, formClosingBalance, formOpeningDate, formClosingDate, formStatus, formNote, user, fetchSessions]);
 
@@ -138,8 +154,14 @@ export default function CashSessionScreen() {
             status: formStatus,
             note: formNote,
         }).eq('id', selectedSession.id);
-        if (error) alert('Erreur');
-        else { setEditModalVisible(false); setSelectedSession(null); await fetchSessions(); }
+        if (error) {
+            setToast({ visible: true, message: 'Erreur lors de la modification', type: 'error' });
+        } else {
+            setEditModalVisible(false);
+            setSelectedSession(null);
+            await fetchSessions();
+            setToast({ visible: true, message: 'Session de caisse modifiée avec succès', type: 'success' });
+        }
         setSaveLoading(false);
     }, [selectedSession, formSessionNumber, formCashBoxName, formOpeningBalance, formClosingBalance, formOpeningDate, formClosingDate, formStatus, formNote, fetchSessions]);
 
@@ -251,6 +273,14 @@ export default function CashSessionScreen() {
                     </View>
                 </View>
             </Modal>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }

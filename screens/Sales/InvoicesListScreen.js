@@ -8,6 +8,7 @@ import {
     ModernStatusBadge,
     ModernTable
 } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -33,6 +34,7 @@ export default function InvoicesListScreen({ navigation }) {
     const [companyInfo, setCompanyInfo] = useState(null);
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [invoiceToDelete, setInvoiceToDelete] = useState(null);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
     
     const { theme, language, user } = useAuth();
     const tTheme = themes[theme];
@@ -66,7 +68,7 @@ export default function InvoicesListScreen({ navigation }) {
         
         if (error) {
             console.error('Error fetching invoices:', error);
-            Alert.alert('Erreur', error.message || 'Impossible de charger les factures');
+            setToast({ visible: true, message: error.message || 'Impossible de charger les factures', type: 'error' });
         } else {
             setInvoices(data || []);
             setFilteredInvoices(data || []);
@@ -123,12 +125,12 @@ export default function InvoicesListScreen({ navigation }) {
     // Handle print invoice
     const handlePrintInvoice = useCallback(async (invoice) => {
         if (!invoice.client) {
-            Alert.alert('Erreur', 'Informations client manquantes');
+            setToast({ visible: true, message: 'Informations client manquantes', type: 'warning' });
             return;
         }
 
         if (!companyInfo) {
-            Alert.alert('Erreur', 'Veuillez compléter les informations de votre entreprise dans Paramétrage Société');
+            setToast({ visible: true, message: 'Veuillez compléter les informations de votre entreprise dans Paramétrage Société', type: 'warning' });
             return;
         }
 
@@ -147,7 +149,7 @@ export default function InvoicesListScreen({ navigation }) {
                 await RNPrint.print({ filePath });
             } catch (error) {
                 console.error('Print error:', error);
-                Alert.alert('Erreur', 'Impossible d\'imprimer la facture');
+                setToast({ visible: true, message: 'Impossible d\'imprimer la facture', type: 'error' });
             }
         }
     }, [companyInfo]);
@@ -155,12 +157,12 @@ export default function InvoicesListScreen({ navigation }) {
     // Handle download/share invoice
     const handleDownloadInvoice = useCallback(async (invoice) => {
         if (!invoice.client) {
-            Alert.alert('Erreur', 'Informations client manquantes');
+            setToast({ visible: true, message: 'Informations client manquantes', type: 'warning' });
             return;
         }
 
         if (!companyInfo) {
-            Alert.alert('Erreur', 'Veuillez compléter les informations de votre entreprise dans Paramétrage Société');
+            setToast({ visible: true, message: 'Veuillez compléter les informations de votre entreprise dans Paramétrage Société', type: 'warning' });
             return;
         }
 
@@ -184,7 +186,7 @@ export default function InvoicesListScreen({ navigation }) {
             } catch (error) {
                 if (error.message !== "User did not share") {
                     console.error('Download error:', error);
-                    Alert.alert('Erreur', 'Impossible de télécharger la facture');
+                    setToast({ visible: true, message: 'Impossible de télécharger la facture', type: 'error' });
                 }
             }
         }
@@ -213,15 +215,15 @@ export default function InvoicesListScreen({ navigation }) {
 
             if (error) {
                 console.error('Delete error:', error);
-                Alert.alert('Erreur', error.message);
+                setToast({ visible: true, message: error.message, type: 'error' });
             } else {
                 console.log('Invoice deleted successfully');
                 setInvoices(prev => prev.filter(inv => inv.id !== invoiceToDelete.id));
-                Alert.alert('✓ Succès', 'Facture supprimée avec succès');
+                setToast({ visible: true, message: 'Facture supprimée avec succès', type: 'success' });
             }
         } catch (error) {
             console.error('Delete error:', error);
-            Alert.alert('Erreur', 'Impossible de supprimer la facture');
+            setToast({ visible: true, message: 'Impossible de supprimer la facture', type: 'error' });
         }
         
         setInvoiceToDelete(null);
@@ -438,6 +440,14 @@ export default function InvoicesListScreen({ navigation }) {
                     </View>
                 </View>
             </Modal>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }

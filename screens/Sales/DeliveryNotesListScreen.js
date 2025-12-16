@@ -1,16 +1,18 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import React, { useCallback, useLayoutEffect, useMemo, useState } from 'react';
-import { Alert, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Alert, Modal, Platform, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import {
     ModernFilterChip,
     ModernSearchBar,
     ModernStatusBadge,
     ModernTable,
 } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { printDeliveryNoteWeb } from '../../services/pdfGenerator';
 import { getGlobalStyles } from '../../styles/GlobalStyles';
 
 export default function DeliveryNotesListScreen() {
@@ -23,6 +25,7 @@ export default function DeliveryNotesListScreen() {
     const [statusFilter, setStatusFilter] = useState('all');
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [noteToDelete, setNoteToDelete] = useState(null);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
     
     const { theme, language, user } = useAuth();
     const tTheme = themes[theme];
@@ -64,7 +67,7 @@ export default function DeliveryNotesListScreen() {
             
         if (error) {
             console.error('Error fetching delivery notes:', error);
-            Alert.alert('Erreur', error.message || 'Impossible de charger les bons de livraison');
+            setToast({ visible: true, message: error.message || 'Impossible de charger les bons de livraison', type: 'error' });
         } else {
             setDeliveryNotes(data || []);
             setFilteredNotes(data || []);
@@ -134,14 +137,14 @@ export default function DeliveryNotesListScreen() {
 
             if (error) {
                 console.error('Delete error:', error);
-                Alert.alert('Erreur', error.message);
+                setToast({ visible: true, message: error.message, type: 'error' });
             } else {
                 setDeliveryNotes(prev => prev.filter(note => note.id !== noteToDelete.id));
-                Alert.alert('✓ Succès', 'Bon de livraison supprimé avec succès');
+                setToast({ visible: true, message: 'Bon de livraison supprimé avec succès', type: 'success' });
             }
         } catch (error) {
             console.error('Delete error:', error);
-            Alert.alert('Erreur', 'Impossible de supprimer le bon de livraison');
+            setToast({ visible: true, message: 'Impossible de supprimer le bon de livraison', type: 'error' });
         }
         
         setNoteToDelete(null);
@@ -151,6 +154,45 @@ export default function DeliveryNotesListScreen() {
         setDeleteModalVisible(false);
         setNoteToDelete(null);
     }, []);
+
+    const handlePrintNote = useCallback(async (deliveryNote) => {
+        try {
+            // Fetch client details
+            const { data: clientData, error: clientError } = await supabase
+                .from('clients')
+                .select('*')
+                .eq('id', deliveryNote.client_id)
+                .single();
+            
+            if (clientError) {
+                console.error('Client fetch error:', clientError);
+                setToast({ visible: true, message: 'Impossible de charger les informations du client', type: 'error' });
+                return;
+            }
+
+            // Fetch company info
+            const { data: companyData, error: companyError } = await supabase
+                .from('company_info')
+                .select('*')
+                .eq('user_id', user.id)
+                .single();
+            
+            if (companyError) {
+                console.error('Company fetch error:', companyError);
+                setToast({ visible: true, message: 'Impossible de charger les informations de l\'entreprise', type: 'error' });
+                return;
+            }
+
+            if (Platform.OS === 'web') {
+                printDeliveryNoteWeb(deliveryNote, clientData, companyData);
+            } else {
+                setToast({ visible: true, message: 'L\'impression mobile sera bientôt disponible', type: 'info' });
+            }
+        } catch (error) {
+            console.error('Print error:', error);
+            setToast({ visible: true, message: 'Impossible d\'imprimer le bon de livraison', type: 'error' });
+        }
+    }, [user]);
 
     const tableColumns = useMemo(() => {
         return [
@@ -203,7 +245,7 @@ export default function DeliveryNotesListScreen() {
                             style={[localStyles.actionButton, { backgroundColor: tTheme.primary + '15' }]}
                             onPress={(e) => {
                                 e.stopPropagation();
-                                Alert.alert('Impression', `Impression du bon ${row.delivery_note_number}`);
+                                handlePrintNote(row);
                             }}
                         >
                             <Ionicons name="print-outline" size={18} color={tTheme.primary} />
@@ -227,7 +269,7 @@ export default function DeliveryNotesListScreen() {
                 ),
             },
         ];
-    }, [tTheme, handleDeleteNote]);
+    }, [tTheme, handleDeleteNote, handlePrintNote]);
 
     const filterOptions = [
         { value: 'all', label: 'Tous' },
@@ -330,6 +372,14 @@ export default function DeliveryNotesListScreen() {
                     </View>
                 </View>
             </Modal>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }

@@ -13,6 +13,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { useResponsive } from '../../hooks/useResponsive';
@@ -381,6 +382,7 @@ export default function CreateInvoiceScreen({ navigation, route }) {
     
     // UI State
     const [loading, setLoading] = useState(false);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
     
     // Update navigation title
     useEffect(() => {
@@ -393,7 +395,7 @@ export default function CreateInvoiceScreen({ navigation, route }) {
     useEffect(() => {
         const fetchClients = async () => {
             const { data, error } = await supabase.from('clients').select('id, name');
-            if (error) Alert.alert(t.error, error.message);
+            if (error) setToast({ visible: true, message: error.message, type: 'error' });
             else setClients(data);
         };
         fetchClients();
@@ -493,7 +495,7 @@ export default function CreateInvoiceScreen({ navigation, route }) {
         
         if (!selectedClientId || !invoiceNumber) {
             console.log('🔴 VALIDATION FAILED');
-            Alert.alert(t.error, t.pleaseSelectClient);
+            setToast({ visible: true, message: t.pleaseSelectClient, type: 'warning' });
             return;
         }
         
@@ -538,20 +540,21 @@ export default function CreateInvoiceScreen({ navigation, route }) {
 
         if (error) {
             console.error('🔴 Supabase error:', error);
-            Alert.alert(t.error, error.message);
+            setToast({ visible: true, message: error.message, type: 'error' });
         } else {
             console.log('🔴 SUCCESS!');
-            Alert.alert(
-                t.success, 
-                isEditing ? 'Facture modifiée avec succès' : t.invoiceCreated
-            );
-            if (isEditing) {
-                // Navigate back to invoice list after editing
-                navigation.navigate('InvoicesList');
-            } else {
-                // Go back after creating new invoice
-                navigation.goBack();
-            }
+            setToast({
+                visible: true,
+                message: isEditing ? 'Facture modifiée avec succès' : t.invoiceCreated,
+                type: 'success',
+            });
+            setTimeout(() => {
+                if (isEditing) {
+                    navigation.navigate('InvoicesList');
+                } else {
+                    navigation.goBack();
+                }
+            }, 1500);
         }
         setLoading(false);
     };
@@ -672,6 +675,14 @@ export default function CreateInvoiceScreen({ navigation, route }) {
                     loading={loading}
                 />
             </View>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </ScrollView>
     );
 }

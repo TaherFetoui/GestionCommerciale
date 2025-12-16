@@ -3,14 +3,18 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
-    TouchableOpacity,
     View,
+    useWindowDimensions
 } from 'react-native';
+import {
+    ModernStatusBadge,
+    ModernTable
+} from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { useReporting } from '../../context/ReportingContext';
@@ -28,6 +32,7 @@ export default function SupplierReportScreen() {
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
     const [stats, setStats] = useState({
         total: 0,
         paid: 0,
@@ -38,6 +43,8 @@ export default function SupplierReportScreen() {
     const styles = getGlobalStyles(theme);
     const tTheme = themes[theme];
     const t = translations[language];
+    const { width } = useWindowDimensions();
+    const isMobile = width < 768;
 
     useEffect(() => {
         if (supplierId) {
@@ -62,7 +69,7 @@ export default function SupplierReportScreen() {
             .single();
 
         if (error) {
-            Alert.alert(t.error, error.message);
+            setToast({ visible: true, message: error.message, type: 'error' });
             return null;
         } else {
             setSupplier(data);
@@ -165,7 +172,7 @@ export default function SupplierReportScreen() {
             setTransactions(allTransactions);
             calculateStats(allTransactions);
         } catch (error) {
-            Alert.alert(t.error, error.message);
+            setToast({ visible: true, message: error.message, type: 'error' });
         }
     };
 
@@ -268,30 +275,26 @@ export default function SupplierReportScreen() {
     }
 
     return (
-        <ScrollView 
-            style={[styles.container, { backgroundColor: tTheme.background }]}
-            refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-        >
-            <View style={localStyles.header}>
-                <TouchableOpacity 
-                    onPress={() => navigation.goBack()} 
-                    style={[localStyles.backButton, { backgroundColor: tTheme.cardBackground }]}
-                >
-                    <Ionicons name="arrow-back" size={24} color={tTheme.text} />
-                </TouchableOpacity>
-                <View style={localStyles.headerText}>
-                    <Text style={[localStyles.title, { color: tTheme.text }]}>
-                        Rapport Fournisseur
-                    </Text>
-                    <Text style={[localStyles.subtitle, { color: tTheme.textSecondary }]}>
+        <View style={[styles.container, { backgroundColor: tTheme.background }]}>
+            <ScrollView 
+                contentContainerStyle={localStyles.scrollContent}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[tTheme.primary]} />
+                }
+            >
+                {/* Supplier Info Header */}
+                <View style={[localStyles.supplierHeader, { backgroundColor: tTheme.card }]}>
+                    <Text style={[localStyles.supplierName, { color: tTheme.text }]}>
                         {supplierName || supplier?.name}
                     </Text>
+                    {supplier?.email && (
+                        <Text style={[localStyles.supplierEmail, { color: tTheme.textSecondary }]}>
+                            {supplier.email}
+                        </Text>
+                    )}
                 </View>
-            </View>
 
-            <View style={localStyles.statsGrid}>
+                <View style={localStyles.statsGrid}>
                 <View style={[localStyles.statCard, { backgroundColor: tTheme.cardBackground }]}>
                     <Ionicons name="document-text-outline" size={24} color={tTheme.primary} />
                     <Text style={[localStyles.statLabel, { color: tTheme.textSecondary }]}>
@@ -333,99 +336,129 @@ export default function SupplierReportScreen() {
                 </View>
             </View>
 
-            <View style={[localStyles.transactionsSection, { backgroundColor: tTheme.cardBackground }]}>
-                <Text style={[localStyles.sectionTitle, { color: tTheme.text }]}>
-                    Historique des transactions
-                </Text>
-
-                {transactions.length === 0 ? (
-                    <View style={localStyles.emptyState}>
-                        <Ionicons name="document-outline" size={64} color={tTheme.textSecondary} />
-                        <Text style={[localStyles.emptyText, { color: tTheme.textSecondary }]}>
-                            Aucune transaction trouvée
-                        </Text>
-                    </View>
-                ) : (
-                    transactions.map(transaction => (
-                        <View 
-                            key={transaction.id} 
-                            style={[localStyles.transactionCard, { 
-                                backgroundColor: tTheme.background,
-                                borderLeftColor: getStatusColor(transaction.status)
-                            }]}
-                        >
-                            <View style={localStyles.transactionHeader}>
-                                <View style={localStyles.transactionInfo}>
-                                    <Text style={[localStyles.transactionType, { color: tTheme.text }]}>
-                                        {transaction.type}
+            {/* Transactions Table */}
+            <Text style={[localStyles.sectionTitle, { color: tTheme.text }]}>
+                Historique des transactions
+            </Text>
+            
+            <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={true}
+                style={localStyles.tableWrapper}
+                contentContainerStyle={{ minWidth: '100%' }}
+            >
+                <View style={{ flex: 1, minWidth: isMobile ? 800 : '100%' }}>
+                    <ModernTable
+                        data={transactions}
+                        columns={[
+                            {
+                                key: 'date',
+                                label: 'Date',
+                                flex: 1.2,
+                                render: (row) => (
+                                    <Text style={{ color: tTheme.textSecondary, fontSize: 12 }}>
+                                        {new Date(row.date).toLocaleDateString('fr-FR')}
                                     </Text>
-                                    <Text style={[localStyles.transactionRef, { color: tTheme.textSecondary }]}>
-                                        {transaction.reference}
-                                    </Text>
-                                </View>
-                                <View style={localStyles.transactionRight}>
-                                    <Text style={[localStyles.transactionAmount, { color: tTheme.text }]}>
-                                        {transaction.amount.toFixed(2)} DH
-                                    </Text>
-                                    <View style={[localStyles.statusBadge, { 
-                                        backgroundColor: getStatusColor(transaction.status) + '20' 
-                                    }]}>
-                                        <Text style={[localStyles.statusText, { 
-                                            color: getStatusColor(transaction.status) 
-                                        }]}>
-                                            {getStatusText(transaction.status)}
+                                ),
+                            },
+                            {
+                                key: 'type',
+                                label: 'Type',
+                                flex: 1.2,
+                                render: (row) => (
+                                    <View>
+                                        <Text style={{ color: tTheme.text, fontWeight: '600', fontSize: 13 }} numberOfLines={1}>
+                                            {row.type}
+                                        </Text>
+                                        <Text style={{ color: tTheme.textSecondary, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
+                                            {row.reference}
                                         </Text>
                                     </View>
-                                </View>
-                            </View>
-                            <Text style={[localStyles.transactionDate, { color: tTheme.textSecondary }]}>
-                                {new Date(transaction.date).toLocaleDateString('fr-FR', {
-                                    year: 'numeric',
-                                    month: 'long',
-                                    day: 'numeric'
-                                })}
-                            </Text>
-                            {transaction.description && (
-                                <Text style={[localStyles.transactionDesc, { color: tTheme.textSecondary }]}>
-                                    {transaction.description}
-                                </Text>
-                            )}
-                        </View>
-                    ))
-                )}
-            </View>
-        </ScrollView>
+                                ),
+                            },
+                            {
+                                key: 'description',
+                                label: 'Description',
+                                flex: 1.8,
+                                render: (row) => (
+                                    <Text style={{ color: tTheme.textSecondary, fontSize: 12 }} numberOfLines={2}>
+                                        {row.description || '-'}
+                                    </Text>
+                                ),
+                            },
+                            {
+                                key: 'amount',
+                                label: 'Montant',
+                                flex: 1,
+                                render: (row) => (
+                                    <Text style={{ color: tTheme.text, fontWeight: 'bold', fontSize: 13, textAlign: 'right' }}>
+                                        {row.amount.toFixed(3)} TND
+                                    </Text>
+                                ),
+                            },
+                            {
+                                key: 'status',
+                                label: 'Statut',
+                                flex: 1,
+                                render: (row) => {
+                                    const statusConfig = {
+                                        'paid': { label: 'Payé', variant: 'success' },
+                                        'received': { label: 'Reçu', variant: 'success' },
+                                        'encashed': { label: 'Encaissé', variant: 'success' },
+                                        'approved': { label: 'Approuvé', variant: 'success' },
+                                        'pending': { label: 'En attente', variant: 'warning' },
+                                        'ordered': { label: 'Commandé', variant: 'warning' },
+                                        'deposited': { label: 'Déposé', variant: 'warning' },
+                                        'draft': { label: 'Brouillon', variant: 'default' },
+                                        'cancelled': { label: 'Annulé', variant: 'default' },
+                                        'bounced': { label: 'Impayé', variant: 'error' },
+                                        'rejected': { label: 'Rejeté', variant: 'error' },
+                                    };
+                                    const config = statusConfig[row.status] || { label: row.status, variant: 'default' };
+                                    return <ModernStatusBadge label={config.label} variant={config.variant} />;
+                                },
+                            },
+                        ]}
+                        theme={theme}
+                        loading={loading}
+                        emptyMessage="Aucune transaction trouvée"
+                    />
+                </View>
+            </ScrollView>
+
+            </ScrollView>
+            
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
+        </View>
     );
 }
 
 const localStyles = StyleSheet.create({
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 16,
-        gap: 12,
+    scrollContent: {
+        padding: 20,
     },
-    backButton: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        alignItems: 'center',
-        justifyContent: 'center',
+    supplierHeader: {
+        padding: 20,
+        borderRadius: 12,
+        marginBottom: 20,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 3,
     },
-    headerText: {
-        flex: 1,
-    },
-    title: {
-        fontSize: 24,
+    supplierName: {
+        fontSize: 22,
         fontWeight: 'bold',
     },
-    subtitle: {
-        fontSize: 16,
+    supplierEmail: {
+        fontSize: 14,
         marginTop: 4,
     },
     statsGrid: {
@@ -456,75 +489,13 @@ const localStyles = StyleSheet.create({
         fontWeight: 'bold',
         marginTop: 4,
     },
-    transactionsSection: {
-        margin: 16,
-        padding: 16,
-        borderRadius: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
     sectionTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginBottom: 16,
-    },
-    emptyState: {
-        alignItems: 'center',
-        paddingVertical: 48,
-    },
-    emptyText: {
-        fontSize: 16,
-        marginTop: 16,
-    },
-    transactionCard: {
-        padding: 16,
-        borderRadius: 8,
-        marginBottom: 12,
-        borderLeftWidth: 4,
-    },
-    transactionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 8,
-    },
-    transactionInfo: {
-        flex: 1,
-    },
-    transactionType: {
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    transactionRef: {
-        fontSize: 14,
-        marginTop: 2,
-    },
-    transactionRight: {
-        alignItems: 'flex-end',
-    },
-    transactionAmount: {
         fontSize: 18,
         fontWeight: 'bold',
+        marginBottom: 16,
+        marginTop: 8,
     },
-    statusBadge: {
-        paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderRadius: 12,
-        marginTop: 4,
-    },
-    statusText: {
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    transactionDate: {
-        fontSize: 12,
-        marginTop: 4,
-    },
-    transactionDesc: {
-        fontSize: 12,
-        marginTop: 4,
-        fontStyle: 'italic',
+    tableWrapper: {
+        marginBottom: 20,
     },
 });

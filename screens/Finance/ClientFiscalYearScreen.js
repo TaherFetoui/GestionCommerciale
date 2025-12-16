@@ -3,6 +3,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useCallback, useLayoutEffect, useState } from 'react';
 import { Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { ModernActionButton, ModernFilterChip, ModernSearchBar, ModernStatusBadge, ModernTable } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { printFinanceDocument } from '../../services/pdfGenerator';
@@ -22,6 +23,7 @@ export default function ClientFiscalYearScreen() {
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [selectedYear, setSelectedYear] = useState(null);
     const [yearToDelete, setYearToDelete] = useState(null);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     const [formYearName, setFormYearName] = useState('');
     const [formStartDate, setFormStartDate] = useState('');
@@ -101,13 +103,22 @@ export default function ClientFiscalYearScreen() {
         if (!yearToDelete) return;
         setSaveLoading(true);
         const { error } = await supabase.from('fiscal_years').delete().eq('id', yearToDelete.id);
-        if (error) alert('Erreur');
-        else { setDeleteModalVisible(false); setYearToDelete(null); await fetchYears(); }
+        if (error) {
+            setToast({ visible: true, message: 'Erreur lors de la suppression', type: 'error' });
+        } else {
+            setDeleteModalVisible(false);
+            setYearToDelete(null);
+            await fetchYears();
+            setToast({ visible: true, message: 'Exercice fiscal supprimé avec succès', type: 'success' });
+        }
         setSaveLoading(false);
     }, [yearToDelete, fetchYears]);
 
     const handleSaveNewYear = useCallback(async () => {
-        if (!formYearName || !formStartDate || !formEndDate) { alert('Champs obligatoires manquants'); return; }
+        if (!formYearName || !formStartDate || !formEndDate) {
+            setToast({ visible: true, message: 'Champs obligatoires manquants', type: 'warning' });
+            return;
+        }
         setSaveLoading(true);
         const { error } = await supabase.from('fiscal_years').insert([{
             year_name: formYearName,
@@ -118,8 +129,13 @@ export default function ClientFiscalYearScreen() {
             note: formNote,
             created_by: user?.id,
         }]);
-        if (error) alert('Erreur');
-        else { setCreateModalVisible(false); await fetchYears(); }
+        if (error) {
+            setToast({ visible: true, message: 'Erreur lors de la création', type: 'error' });
+        } else {
+            setCreateModalVisible(false);
+            await fetchYears();
+            setToast({ visible: true, message: 'Exercice fiscal créé avec succès', type: 'success' });
+        }
         setSaveLoading(false);
     }, [formYearName, formStartDate, formEndDate, formStatus, formNote, user, fetchYears]);
 
@@ -133,8 +149,14 @@ export default function ClientFiscalYearScreen() {
             status: formStatus,
             note: formNote,
         }).eq('id', selectedYear.id);
-        if (error) alert('Erreur');
-        else { setEditModalVisible(false); setSelectedYear(null); await fetchYears(); }
+        if (error) {
+            setToast({ visible: true, message: 'Erreur lors de la modification', type: 'error' });
+        } else {
+            setEditModalVisible(false);
+            setSelectedYear(null);
+            await fetchYears();
+            setToast({ visible: true, message: 'Exercice fiscal modifié avec succès', type: 'success' });
+        }
         setSaveLoading(false);
     }, [selectedYear, formYearName, formStartDate, formEndDate, formStatus, formNote, fetchYears]);
 
@@ -275,6 +297,14 @@ export default function ClientFiscalYearScreen() {
                     </View>
                 </View>
             </Modal>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }

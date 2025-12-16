@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ModernStatusBadge } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -13,6 +14,7 @@ export default function PurchaseOrderDetailsScreen({ route, navigation }) {
     const [supplier, setSupplier] = useState(null);
     const [loading, setLoading] = useState(true);
     const [statusMenuVisible, setStatusMenuVisible] = useState(false);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     const { theme, language, user } = useAuth();
     const tTheme = themes[theme];
@@ -40,7 +42,7 @@ export default function PurchaseOrderDetailsScreen({ route, navigation }) {
 
             if (error) {
                 console.error('Error fetching order:', error);
-                Alert.alert(t.error || 'Erreur', 'Impossible de charger les détails de la commande');
+                setToast({ visible: true, message: 'Impossible de charger les détails de la commande', type: 'error' });
             } else if (data) {
                 // Fetch supplier separately if supplier_id exists
                 if (data.supplier_id) {
@@ -70,16 +72,16 @@ export default function PurchaseOrderDetailsScreen({ route, navigation }) {
                 .eq('id', order_id);
 
             if (error) {
-                Alert.alert(t.error || 'Erreur', 'Impossible de mettre à jour le statut');
+                setToast({ visible: true, message: 'Impossible de mettre à jour le statut', type: 'error' });
                 console.error(error);
             } else {
                 setOrder(prev => ({ ...prev, status: newStatus }));
                 setStatusMenuVisible(false);
-                Alert.alert('Succès', 'Statut mis à jour avec succès');
+                setToast({ visible: true, message: 'Statut mis à jour avec succès', type: 'success' });
             }
         } catch (error) {
             console.error('Status update error:', error);
-            Alert.alert(t.error || 'Erreur', 'Une erreur est survenue');
+            setToast({ visible: true, message: 'Une erreur est survenue', type: 'error' });
         }
     }, [order_id, t.error]);
 
@@ -297,6 +299,14 @@ export default function PurchaseOrderDetailsScreen({ route, navigation }) {
                     </View>
                 )}
             </ScrollView>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }

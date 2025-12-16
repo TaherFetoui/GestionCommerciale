@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Dimensions, Easing, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Defs, Line, Path, Stop, LinearGradient as SvgLinearGradient, Text as SvgText } from 'react-native-svg';
+import Toast from '../components/Toast';
 import { themes, translations } from '../constants/AppConfig';
 import { useAuth } from '../context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
@@ -327,7 +328,29 @@ const DonutChart3D = React.memo(({ data, title, theme, size = 200 }) => {
     }
     
     const total = data.reduce((sum, item) => sum + item.value, 0);
+    
+    // Function to create SVG path for donut segment
+    const createDonutPath = (startAngle, endAngle, outerRadius, innerRadius) => {
+        const startAngleRad = (startAngle - 90) * Math.PI / 180;
+        const endAngleRad = (endAngle - 90) * Math.PI / 180;
+        
+        const x1 = outerRadius + outerRadius * Math.cos(startAngleRad);
+        const y1 = outerRadius + outerRadius * Math.sin(startAngleRad);
+        const x2 = outerRadius + outerRadius * Math.cos(endAngleRad);
+        const y2 = outerRadius + outerRadius * Math.sin(endAngleRad);
+        const x3 = outerRadius + innerRadius * Math.cos(endAngleRad);
+        const y3 = outerRadius + innerRadius * Math.sin(endAngleRad);
+        const x4 = outerRadius + innerRadius * Math.cos(startAngleRad);
+        const y4 = outerRadius + innerRadius * Math.sin(startAngleRad);
+        
+        const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+        
+        return `M ${x1} ${y1} A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${x2} ${y2} L ${x3} ${y3} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${x4} ${y4} Z`;
+    };
+    
     let currentAngle = 0;
+    const outerRadius = size / 2;
+    const innerRadius = size / 4;
     
     return (
         <View style={[getGlobalStyles(theme).card, localStyles.chartContainer]}>
@@ -335,63 +358,47 @@ const DonutChart3D = React.memo(({ data, title, theme, size = 200 }) => {
             
             <View style={localStyles.donutContainer}>
                 <Animated.View
-                    style={[
-                        localStyles.donut3D,
-                        {
-                            width: size,
-                            height: size,
-                            transform: [
-                                { perspective: 1000 },
-                                { rotateY: rotation },
-                                { rotateX: '60deg' },
-                            ],
-                        },
-                    ]}
+                    style={{
+                        transform: [{ rotateY: rotation }]
+                    }}
                 >
-                    {data.map((item, index) => {
-                        const percentage = (item.value / total) * 100;
-                        const angle = (item.value / total) * 360;
-                        const startAngle = currentAngle;
-                        currentAngle += angle;
+                    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                        <Defs>
+                            {data.map((item, index) => (
+                                <SvgLinearGradient
+                                    key={`gradient-${index}`}
+                                    id={`gradient-${index}`}
+                                    x1="0%"
+                                    y1="0%"
+                                    x2="100%"
+                                    y2="100%"
+                                >
+                                    <Stop offset="0%" stopColor={item.color} stopOpacity="1" />
+                                    <Stop offset="100%" stopColor={item.color} stopOpacity="0.7" />
+                                </SvgLinearGradient>
+                            ))}
+                        </Defs>
                         
-                        return (
-                            <View
-                                key={index}
-                                style={[
-                                    localStyles.donutSegment,
-                                    {
-                                        width: size,
-                                        height: size,
-                                        borderRadius: size / 2,
-                                        transform: [{ rotate: `${startAngle}deg` }],
-                                    },
-                                ]}
-                            >
-                                <LinearGradient
-                                    colors={[item.color, item.color + 'AA']}
-                                    style={[
-                                        localStyles.donutSegmentInner,
-                                        { borderRadius: size / 2 },
-                                    ]}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
+                        {data.map((item, index) => {
+                            const percentage = (item.value / total) * 100;
+                            const angle = (item.value / total) * 360;
+                            const startAngle = currentAngle;
+                            const endAngle = currentAngle + angle;
+                            currentAngle = endAngle;
+                            
+                            const path = createDonutPath(startAngle, endAngle, outerRadius, innerRadius);
+                            
+                            return (
+                                <Path
+                                    key={index}
+                                    d={path}
+                                    fill={`url(#gradient-${index})`}
+                                    stroke={tTheme.card}
+                                    strokeWidth={2}
                                 />
-                            </View>
-                        );
-                    })}
-                    
-                    {/* Center hole for donut effect */}
-                    <View
-                        style={[
-                            localStyles.donutHole,
-                            {
-                                width: size * 0.5,
-                                height: size * 0.5,
-                                borderRadius: (size * 0.5) / 2,
-                                backgroundColor: tTheme.card,
-                            },
-                        ]}
-                    />
+                            );
+                        })}
+                    </Svg>
                 </Animated.View>
                 
                 {/* Legend */}
@@ -833,6 +840,7 @@ export default function DashboardScreen() {
     const [recentActivities, setRecentActivities] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
     
     // Animated welcome banner
     const bannerAnim = useRef(new Animated.Value(0)).current;
@@ -877,13 +885,15 @@ export default function DashboardScreen() {
                 purchasesData,
                 clientsData,
                 suppliersData,
-                itemsData
+                itemsData,
+                familiesData
             ] = await Promise.all([
                 supabase.from('invoices').select('*, items, client_id, invoice_number, created_at, status, total_amount').eq('user_id', user.id).order('created_at', { ascending: false }),
                 supabase.from('purchase_orders').select('*, items, supplier_id, created_at, status, order_number, total_amount').eq('user_id', user.id).order('created_at', { ascending: false }),
                 supabase.from('clients').select('id, name, created_at').eq('user_id', user.id).order('created_at', { ascending: false }),
                 supabase.from('suppliers').select('id, name, created_at').eq('user_id', user.id).order('created_at', { ascending: false }),
-                supabase.from('items').select('id, name, family_id, sale_price, purchase_price').eq('user_id', user.id)
+                supabase.from('items').select('id, name, family_id, sale_price, purchase_price').eq('user_id', user.id),
+                supabase.from('item_families').select('id, name').eq('user_id', user.id)
             ]);
 
             console.log('✅ Data fetched:', {
@@ -891,7 +901,8 @@ export default function DashboardScreen() {
                 purchases: purchasesData.data?.length,
                 clients: clientsData.data?.length,
                 suppliers: suppliersData.data?.length,
-                items: itemsData.data?.length
+                items: itemsData.data?.length,
+                families: familiesData.data?.length
             });
             
             if (invoicesData.data && invoicesData.data.length > 0) {
@@ -1079,16 +1090,23 @@ export default function DashboardScreen() {
             ]);
             
             // Generate category distribution from items
+            // Create a map of family IDs to family names
+            const familyMap = {};
+            familiesData.data?.forEach(family => {
+                familyMap[family.id] = family.name;
+            });
+            
             const familyStats = {};
             let totalFamilyValue = 0;
             
             itemsData.data?.forEach(item => {
-                const family = item.family_id || 'Non catégorisé';
-                if (!familyStats[family]) {
-                    familyStats[family] = 0;
+                // Get the family name from the ID, or use 'Non catégorisé' if not found
+                const familyName = item.family_id ? (familyMap[item.family_id] || 'Non catégorisé') : 'Non catégorisé';
+                if (!familyStats[familyName]) {
+                    familyStats[familyName] = 0;
                 }
                 // Count items or use a value metric
-                familyStats[family] += 1;
+                familyStats[familyName] += 1;
                 totalFamilyValue += 1;
             });
             
@@ -1179,7 +1197,7 @@ export default function DashboardScreen() {
 
         } catch (error) {
             console.error('❌ Error fetching dashboard data:', error);
-            Alert.alert('Erreur', 'Impossible de charger les données du tableau de bord');
+            setToast({ visible: true, message: 'Impossible de charger les données du tableau de bord', type: 'error' });
         } finally {
             setLoading(false);
         }
@@ -1329,6 +1347,14 @@ export default function DashboardScreen() {
 
             {/* Recent Activities */}
             <RecentActivity activities={recentActivities} theme={theme} />
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </ScrollView>
         </View>
     );

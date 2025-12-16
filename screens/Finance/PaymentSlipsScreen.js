@@ -3,6 +3,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useCallback, useLayoutEffect, useState } from 'react';
 import { Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { ModernActionButton, ModernFilterChip, ModernSearchBar, ModernStatusBadge, ModernTable } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { printFinanceDocument } from '../../services/pdfGenerator';
@@ -22,6 +23,7 @@ export default function PaymentSlipsScreen() {
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [selectedSlip, setSelectedSlip] = useState(null);
     const [slipToDelete, setSlipToDelete] = useState(null);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     const [formSlipNumber, setFormSlipNumber] = useState('');
     const [formSlipType, setFormSlipType] = useState('checks');
@@ -107,9 +109,10 @@ export default function PaymentSlipsScreen() {
         setDeleteModalVisible(false);
         const { error } = await supabase.from('payment_slips').delete().eq('id', slipToDelete.id);
         if (error) {
-            alert('Erreur lors de la suppression');
+            setToast({ visible: true, message: 'Erreur lors de la suppression', type: 'error' });
         } else {
             setSlips(prevSlips => prevSlips.filter(s => s.id !== slipToDelete.id));
+            setToast({ visible: true, message: 'Bordereau supprimé avec succès', type: 'success' });
         }
         setSlipToDelete(null);
     }, [slipToDelete]);
@@ -120,7 +123,7 @@ export default function PaymentSlipsScreen() {
     }, []);
 
     const handleSaveNewSlip = useCallback(async () => {
-        if (!formBankAccount || !formTotalAmount) { alert('Champs obligatoires manquants'); return; }
+        if (!formBankAccount || !formTotalAmount) { setToast({ visible: true, message: 'Champs obligatoires manquants', type: 'warning' }); return; }
         setSaveLoading(true);
         const { error } = await supabase.from('payment_slips').insert([{
             slip_number: formSlipNumber,
@@ -132,8 +135,8 @@ export default function PaymentSlipsScreen() {
             note: formNote,
             created_by: user?.id,
         }]);
-        if (error) alert('Erreur');
-        else { setCreateModalVisible(false); await fetchSlips(); }
+        if (error) setToast({ visible: true, message: 'Erreur lors de la création', type: 'error' });
+        else { setCreateModalVisible(false); setToast({ visible: true, message: 'Bordereau créé avec succès', type: 'success' }); await fetchSlips(); }
         setSaveLoading(false);
     }, [formSlipNumber, formSlipType, formBankAccount, formTotalAmount, formDepositDate, formStatus, formNote, user, fetchSlips]);
 
@@ -149,8 +152,8 @@ export default function PaymentSlipsScreen() {
             status: formStatus,
             note: formNote,
         }).eq('id', selectedSlip.id);
-        if (error) alert('Erreur');
-        else { setEditModalVisible(false); setSelectedSlip(null); await fetchSlips(); }
+        if (error) setToast({ visible: true, message: 'Erreur lors de la modification', type: 'error' });
+        else { setEditModalVisible(false); setSelectedSlip(null); setToast({ visible: true, message: 'Bordereau modifié avec succès', type: 'success' }); await fetchSlips(); }
         setSaveLoading(false);
     }, [selectedSlip, formSlipNumber, formSlipType, formBankAccount, formTotalAmount, formDepositDate, formStatus, formNote, fetchSlips]);
 
@@ -317,6 +320,14 @@ export default function PaymentSlipsScreen() {
                     </View>
                 </View>
             </Modal>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }

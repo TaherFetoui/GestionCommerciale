@@ -80,7 +80,7 @@ export default function Sidebar({ activeScreen, setActiveScreen, onClose }) {
             <View style={styles.header}>
                 <Image source={require('../assets/images/logo.png')} style={styles.logo} />
                 <Text style={[styles.title, { textTransform: 'capitalize' }]} numberOfLines={1}>
-                    {profileName || '...'}
+                    Invoice Manager
                 </Text>
             </View>
 

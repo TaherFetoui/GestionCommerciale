@@ -38,7 +38,7 @@ export default function CreatePurchaseOrderScreen({ navigation }) {
                 
             if (suppliersError) {
                 console.error('Error fetching suppliers:', suppliersError);
-                Alert.alert(t.error || 'Erreur', suppliersError.message);
+                setToast({ visible: true, message: suppliersError.message, type: 'error' });
             } else {
                 setSuppliers(suppliersData || []);
             }
@@ -52,7 +52,7 @@ export default function CreatePurchaseOrderScreen({ navigation }) {
                 
             if (articlesError) {
                 console.error('Error fetching articles:', articlesError);
-                Alert.alert(t.error || 'Erreur', articlesError.message);
+                setToast({ visible: true, message: articlesError.message, type: 'error' });
             } else {
                 setArticles(articlesData || []);
             }
@@ -141,17 +141,19 @@ export default function CreatePurchaseOrderScreen({ navigation }) {
         if (lineItems.length > 1) {
             setLineItems(lineItems.filter((_, i) => i !== index));
         } else {
-            Alert.alert('Information', 'Vous devez avoir au moins un article.');
+            setToast({ visible: true, message: 'Vous devez avoir au moins un article.', type: 'info' });
         }
     };
 
     const handleSave = async () => {
         // Validation
         if (!selectedSupplierId) {
-            return Alert.alert('Champ requis', 'Veuillez sélectionner un fournisseur.');
+            setToast({ visible: true, message: 'Veuillez sélectionner un fournisseur.', type: 'warning' });
+            return;
         }
         if (!orderNumber.trim()) {
-            return Alert.alert('Champ requis', 'Veuillez entrer un numéro de commande.');
+            setToast({ visible: true, message: 'Veuillez entrer un numéro de commande.', type: 'warning' });
+            return;
         }
         
         // Un article est valide seulement s'il a un item_id (sélectionné dans la liste)
@@ -165,7 +167,8 @@ export default function CreatePurchaseOrderScreen({ navigation }) {
             }));
         
         if (validItems.length === 0) {
-            return Alert.alert('Articles requis', 'Veuillez sélectionner au moins un article à la commande.');
+            setToast({ visible: true, message: 'Veuillez sélectionner au moins un article à la commande.', type: 'warning' });
+            return;
         }
         
         setLoading(true);

@@ -7,10 +7,14 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     View,
+    useWindowDimensions
 } from 'react-native';
+import {
+    ModernSearchBar,
+    ModernTable
+} from '../../components/ModernUIComponents';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -28,6 +32,8 @@ export default function SuppliersListScreen() {
     const styles = getGlobalStyles(theme);
     const tTheme = themes[theme];
     const t = translations[language];
+    const { width } = useWindowDimensions();
+    const isMobile = width < 768;
 
     useEffect(() => {
         fetchSuppliers();
@@ -89,156 +95,124 @@ export default function SuppliersListScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: tTheme.background }]}>
-            <View style={localStyles.searchContainer}>
-                <Ionicons name="search-outline" size={20} color={tTheme.textSecondary} />
-                <TextInput
-                    style={[localStyles.searchInput, { color: tTheme.text }]}
-                    placeholder="Rechercher un fournisseur..."
-                    placeholderTextColor={tTheme.textSecondary}
-                    value={searchQuery}
-                    onChangeText={handleSearch}
-                />
-                {searchQuery !== '' && (
-                    <TouchableOpacity onPress={() => handleSearch('')}>
-                        <Ionicons name="close-circle" size={20} color={tTheme.textSecondary} />
-                    </TouchableOpacity>
-                )}
-            </View>
-
             <ScrollView
-                style={styles.container}
+                contentContainerStyle={localStyles.scrollContent}
                 refreshControl={
-                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[tTheme.primary]} />
                 }
             >
-                {filteredSuppliers.length === 0 ? (
-                    <View style={localStyles.emptyContainer}>
-                        <Ionicons name="business-outline" size={64} color={tTheme.textSecondary} />
-                        <Text style={[localStyles.emptyText, { color: tTheme.textSecondary }]}>
-                            {searchQuery ? 'Aucun fournisseur trouvé' : 'Aucun fournisseur disponible'}
-                        </Text>
-                    </View>
-                ) : (
-                    <View style={localStyles.suppliersList}>
-                        {filteredSuppliers.map((supplier) => (
-                            <TouchableOpacity
-                                key={supplier.id}
-                                style={[localStyles.supplierCard, { backgroundColor: tTheme.cardBackground }]}
-                                onPress={() => handleSupplierPress(supplier)}
-                            >
-                                <View style={[localStyles.supplierIcon, { backgroundColor: tTheme.primary + '20' }]}>
-                                    <Ionicons name="business" size={24} color={tTheme.primary} />
-                                </View>
-                                <View style={localStyles.supplierInfo}>
-                                    <Text style={[localStyles.supplierName, { color: tTheme.text }]}>
-                                        {supplier.name}
-                                    </Text>
-                                    {supplier.email && (
-                                        <Text style={[localStyles.supplierDetail, { color: tTheme.textSecondary }]}>
-                                            <Ionicons name="mail-outline" size={14} /> {supplier.email}
+                {/* Search */}
+                <View style={localStyles.filtersContainer}>
+                    <ModernSearchBar
+                        value={searchQuery}
+                        onChangeText={handleSearch}
+                        placeholder="Rechercher un fournisseur..."
+                        theme={theme}
+                    />
+                </View>
+
+                {/* Suppliers Table */}
+                <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={true}
+                    style={localStyles.tableWrapper}
+                    contentContainerStyle={{ minWidth: '100%' }}
+                >
+                    <View style={{ flex: 1, minWidth: isMobile ? 700 : '100%' }}>
+                        <ModernTable
+                            data={filteredSuppliers}
+                            columns={[
+                                {
+                                    key: 'name',
+                                    label: 'Fournisseur',
+                                    flex: 2,
+                                    render: (row) => (
+                                        <View>
+                                            <Text style={{ color: tTheme.text, fontWeight: '600', fontSize: 15 }} numberOfLines={1}>
+                                                {row.name}
+                                            </Text>
+                                            {row.matricule_fiscale && (
+                                                <Text style={{ color: tTheme.textSecondary, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+                                                    MF: {row.matricule_fiscale}
+                                                </Text>
+                                            )}
+                                        </View>
+                                    ),
+                                },
+                                {
+                                    key: 'email',
+                                    label: 'Email',
+                                    flex: 1.5,
+                                    render: (row) => (
+                                        <Text style={{ color: tTheme.textSecondary, fontSize: 13 }} numberOfLines={1}>
+                                            {row.email || '-'}
                                         </Text>
-                                    )}
-                                    {supplier.phone && (
-                                        <Text style={[localStyles.supplierDetail, { color: tTheme.textSecondary }]}>
-                                            <Ionicons name="call-outline" size={14} /> {supplier.phone}
+                                    ),
+                                },
+                                {
+                                    key: 'phone',
+                                    label: 'Téléphone',
+                                    flex: 1.2,
+                                    render: (row) => (
+                                        <Text style={{ color: tTheme.textSecondary, fontSize: 13 }} numberOfLines={1}>
+                                            {row.phone || '-'}
                                         </Text>
-                                    )}
-                                </View>
-                                <Ionicons name="chevron-forward" size={24} color={tTheme.textSecondary} />
-                            </TouchableOpacity>
-                        ))}
+                                    ),
+                                },
+                                {
+                                    key: 'address',
+                                    label: 'Adresse',
+                                    flex: 1.5,
+                                    render: (row) => (
+                                        <Text style={{ color: tTheme.textSecondary, fontSize: 13 }} numberOfLines={1}>
+                                            {row.address || '-'}
+                                        </Text>
+                                    ),
+                                },
+                                {
+                                    key: 'actions',
+                                    label: 'Actions',
+                                    flex: 0.8,
+                                    render: (row) => (
+                                        <TouchableOpacity
+                                            style={[localStyles.actionButton, { backgroundColor: tTheme.primary + '15' }]}
+                                            onPress={(e) => {
+                                                e.stopPropagation();
+                                                handleSupplierPress(row);
+                                            }}
+                                        >
+                                            <Ionicons name="eye-outline" size={18} color={tTheme.primary} />
+                                        </TouchableOpacity>
+                                    ),
+                                },
+                            ]}
+                            onRowPress={handleSupplierPress}
+                            theme={theme}
+                            loading={loading}
+                            emptyMessage="Aucun fournisseur trouvé"
+                        />
                     </View>
-                )}
+                </ScrollView>
             </ScrollView>
         </View>
     );
 }
 
 const localStyles = StyleSheet.create({
-    header: {
+    scrollContent: {
         padding: 20,
-        marginBottom: 16,
-        borderRadius: 12,
-        margin: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
     },
-    titleContainer: {
-        flexDirection: 'row',
+    filtersContainer: {
+        marginBottom: 20,
+    },
+    tableWrapper: {
+        marginBottom: 20,
+    },
+    actionButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 8,
         alignItems: 'center',
-        gap: 12,
-        marginBottom: 8,
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-    },
-    subtitle: {
-        fontSize: 14,
-        marginTop: 4,
-    },
-    searchContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#f5f5f5',
-        borderRadius: 10,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        marginHorizontal: 16,
-        marginBottom: 16,
-    },
-    searchInput: {
-        flex: 1,
-        marginLeft: 8,
-        fontSize: 16,
-    },
-    suppliersList: {
-        padding: 16,
-        paddingTop: 0,
-    },
-    supplierCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
-    },
-    supplierIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
         justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
-    },
-    supplierInfo: {
-        flex: 1,
-    },
-    supplierName: {
-        fontSize: 16,
-        fontWeight: '600',
-        marginBottom: 4,
-    },
-    supplierDetail: {
-        fontSize: 13,
-        marginTop: 2,
-    },
-    emptyContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingVertical: 60,
-    },
-    emptyText: {
-        fontSize: 16,
-        marginTop: 16,
     },
 });

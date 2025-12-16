@@ -19,6 +19,7 @@ import {
     ModernStatusBadge,
     ModernTable,
 } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -40,6 +41,7 @@ export default function ClientReturnsScreen() {
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [selectedReturn, setSelectedReturn] = useState(null);
     const [returnToDelete, setReturnToDelete] = useState(null);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     // Form states
     const [formClient, setFormClient] = useState('');
@@ -182,9 +184,10 @@ export default function ClientReturnsScreen() {
 
         if (error) {
             console.error('Error deleting return:', error);
-            alert('Erreur lors de la suppression');
+            setToast({ visible: true, message: 'Erreur lors de la suppression', type: 'error' });
         } else {
             setReturns(prevReturns => prevReturns.filter(r => r.id !== returnToDelete.id));
+            setToast({ visible: true, message: 'Retenue client supprimée avec succès', type: 'success' });
         }
         setReturnToDelete(null);
     }, [returnToDelete]);
@@ -196,7 +199,7 @@ export default function ClientReturnsScreen() {
 
     const handleSaveNewReturn = useCallback(async () => {
         if (!formClient || !formInvoiceNumber || !formRetentionAmount) {
-            alert('Veuillez remplir tous les champs obligatoires');
+            setToast({ visible: true, message: 'Veuillez remplir tous les champs obligatoires', type: 'warning' });
             return;
         }
 
@@ -215,10 +218,11 @@ export default function ClientReturnsScreen() {
 
         if (error) {
             console.error('Error creating return:', error);
-            alert('Erreur lors de la création');
+            setToast({ visible: true, message: 'Erreur lors de la création', type: 'error' });
         } else {
             setCreateModalVisible(false);
             await fetchReturns();
+            setToast({ visible: true, message: 'Retenue client créée avec succès', type: 'success' });
         }
         setSaveLoading(false);
     }, [formClient, formInvoiceNumber, formRetentionRate, formRetentionAmount, formInvoiceAmount, formRetentionDate, formNote, formStatus, user, fetchReturns]);
@@ -243,11 +247,12 @@ export default function ClientReturnsScreen() {
 
         if (error) {
             console.error('Error updating return:', error);
-            alert('Erreur lors de la modification');
+            setToast({ visible: true, message: 'Erreur lors de la modification', type: 'error' });
         } else {
             setEditModalVisible(false);
             setSelectedReturn(null);
             await fetchReturns();
+            setToast({ visible: true, message: 'Retenue client modifiée avec succès', type: 'success' });
         }
         setSaveLoading(false);
     }, [selectedReturn, formClient, formInvoiceNumber, formRetentionRate, formRetentionAmount, formInvoiceAmount, formRetentionDate, formNote, formStatus, fetchReturns]);
@@ -590,6 +595,14 @@ export default function ClientReturnsScreen() {
                     </View>
                 </View>
             </Modal>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }

@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ModernStatusBadge } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -25,6 +26,7 @@ export default function InvoiceDetailScreen({ route, navigation }) {
     const [loading, setLoading] = useState(true);
     const [pdfLoading, setPdfLoading] = useState(false);
     const [statusMenuVisible, setStatusMenuVisible] = useState(false);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     const { theme, language, user } = useAuth();
     const tTheme = themes[theme];
@@ -64,7 +66,7 @@ export default function InvoiceDetailScreen({ route, navigation }) {
                 .single();
 
             if (error) {
-                Alert.alert(t.error, 'Impossible de charger les détails de la facture');
+                setToast({ visible: true, message: 'Impossible de charger les détails de la facture', type: 'error' });
                 console.error(error);
             } else {
                 setInvoice(data);
@@ -84,27 +86,27 @@ export default function InvoiceDetailScreen({ route, navigation }) {
                 .eq('id', invoice_id);
 
             if (error) {
-                Alert.alert(t.error, 'Impossible de mettre à jour le statut');
+                setToast({ visible: true, message: 'Impossible de mettre à jour le statut', type: 'error' });
                 console.error(error);
             } else {
                 setInvoice(prev => ({ ...prev, status: newStatus }));
                 setStatusMenuVisible(false);
-                Alert.alert('Succès', 'Statut mis à jour avec succès');
+                setToast({ visible: true, message: 'Statut mis à jour avec succès', type: 'success' });
             }
         } catch (error) {
             console.error('Status update error:', error);
-            Alert.alert(t.error, 'Une erreur est survenue');
+            setToast({ visible: true, message: 'Une erreur est survenue', type: 'error' });
         }
     }, [invoice_id, t.error]);
 
     const handlePrint = useCallback(async () => {
         if (!invoice || !client) {
-            Alert.alert(t.error, 'Données de facture manquantes');
+            setToast({ visible: true, message: 'Données de facture manquantes', type: 'warning' });
             return;
         }
 
         if (!companyInfo) {
-            Alert.alert(t.error, 'Veuillez compléter les informations de votre entreprise dans Paramétrage Société');
+            setToast({ visible: true, message: 'Veuillez compléter les informations de votre entreprise dans Paramétrage Société', type: 'warning' });
             return;
         }
 
@@ -123,7 +125,7 @@ export default function InvoiceDetailScreen({ route, navigation }) {
             }
         } catch (error) {
             console.error('Print error:', error);
-            Alert.alert(t.error, 'Impossible d\'imprimer la facture');
+            setToast({ visible: true, message: 'Impossible d\'imprimer la facture', type: 'error' });
         } finally {
             setPdfLoading(false);
         }
@@ -131,12 +133,12 @@ export default function InvoiceDetailScreen({ route, navigation }) {
 
     const handleDownload = useCallback(async () => {
         if (!invoice || !client) {
-            Alert.alert(t.error, 'Données de facture manquantes');
+            setToast({ visible: true, message: 'Données de facture manquantes', type: 'warning' });
             return;
         }
 
         if (!companyInfo) {
-            Alert.alert(t.error, 'Veuillez compléter les informations de votre entreprise dans Paramétrage Société');
+            setToast({ visible: true, message: 'Veuillez compléter les informations de votre entreprise dans Paramétrage Société', type: 'warning' });
             return;
         }
 
@@ -160,7 +162,7 @@ export default function InvoiceDetailScreen({ route, navigation }) {
         } catch (error) {
             if (error.message !== "User did not share") {
                 console.error('Download error:', error);
-                Alert.alert(t.error, 'Impossible de télécharger la facture');
+                setToast({ visible: true, message: 'Impossible de télécharger la facture', type: 'error' });
             }
         } finally {
             setPdfLoading(false);
@@ -378,6 +380,14 @@ export default function InvoiceDetailScreen({ route, navigation }) {
                     </TouchableOpacity>
                 </View>
             </ScrollView>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }

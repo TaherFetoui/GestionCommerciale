@@ -8,6 +8,7 @@ import {
     ModernStatusBadge,
     ModernTable,
 } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -33,6 +34,7 @@ export default function PurchaseOrdersListScreen() {
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [orderToDelete, setOrderToDelete] = useState(null);
     const [companyInfo, setCompanyInfo] = useState(null);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
     
     const { theme, language, user } = useAuth();
     const tTheme = themes[theme];
@@ -88,7 +90,7 @@ export default function PurchaseOrdersListScreen() {
             
         if (error) {
             console.error('Error fetching purchase orders:', error);
-            Alert.alert(t.error || 'Erreur', error.message || 'Impossible de charger les commandes');
+            setToast({ visible: true, message: error.message || 'Impossible de charger les commandes', type: 'error' });
         } else {
             setOrders(data || []);
             setFilteredOrders(data || []);
@@ -145,12 +147,12 @@ export default function PurchaseOrdersListScreen() {
     // Handle print purchase order
     const handlePrintOrder = useCallback(async (order) => {
         if (!order.suppliers) {
-            Alert.alert('Erreur', 'Informations fournisseur manquantes');
+            setToast({ visible: true, message: 'Informations fournisseur manquantes', type: 'warning' });
             return;
         }
 
         if (!companyInfo) {
-            Alert.alert('Erreur', 'Veuillez compléter les informations de votre entreprise dans Paramétrage Société');
+            setToast({ visible: true, message: 'Veuillez compléter les informations de votre entreprise dans Paramétrage Société', type: 'warning' });
             return;
         }
 
@@ -158,19 +160,19 @@ export default function PurchaseOrdersListScreen() {
             printPurchaseOrderWeb(order, order.suppliers, companyInfo);
         } catch (error) {
             console.error('Error printing purchase order:', error);
-            Alert.alert('Erreur', 'Impossible d\'imprimer la commande');
+            setToast({ visible: true, message: 'Impossible d\'imprimer la commande', type: 'error' });
         }
     }, [companyInfo]);
 
     // Handle download/share purchase order
     const handleDownloadOrder = useCallback(async (order) => {
         if (!order.suppliers) {
-            Alert.alert('Erreur', 'Informations fournisseur manquantes');
+            setToast({ visible: true, message: 'Informations fournisseur manquantes', type: 'warning' });
             return;
         }
 
         if (!companyInfo) {
-            Alert.alert('Erreur', 'Veuillez compléter les informations de votre entreprise dans Paramétrage Société');
+            setToast({ visible: true, message: 'Veuillez compléter les informations de votre entreprise dans Paramétrage Société', type: 'warning' });
             return;
         }
 
@@ -178,7 +180,7 @@ export default function PurchaseOrdersListScreen() {
             downloadPurchaseOrderPDFWeb(order, order.suppliers, companyInfo);
         } catch (error) {
             console.error('Error downloading purchase order:', error);
-            Alert.alert('Erreur', 'Impossible de télécharger la commande');
+            setToast({ visible: true, message: 'Impossible de télécharger la commande', type: 'error' });
         }
     }, [companyInfo]);
 
@@ -203,14 +205,14 @@ export default function PurchaseOrdersListScreen() {
 
             if (error) {
                 console.error('Delete error:', error);
-                Alert.alert('Erreur', error.message);
+                setToast({ visible: true, message: error.message, type: 'error' });
             } else {
                 setOrders(prev => prev.filter(order => order.id !== orderToDelete.id));
-                Alert.alert('✓ Succès', 'Commande supprimée avec succès');
+                setToast({ visible: true, message: 'Commande supprimée avec succès', type: 'success' });
             }
         } catch (error) {
             console.error('Delete error:', error);
-            Alert.alert('Erreur', 'Impossible de supprimer la commande');
+            setToast({ visible: true, message: 'Impossible de supprimer la commande', type: 'error' });
         }
         
         setOrderToDelete(null);
@@ -430,6 +432,14 @@ export default function PurchaseOrdersListScreen() {
                     </View>
                 </View>
             </Modal>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }

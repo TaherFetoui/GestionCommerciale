@@ -7,6 +7,7 @@ import {
     ModernSearchBar,
     ModernTable,
 } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -20,6 +21,7 @@ export default function StockMovementsScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [typeFilter, setTypeFilter] = useState('all');
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
     const { theme, language } = useAuth();
     const tTheme = themes[theme];
@@ -34,7 +36,7 @@ export default function StockMovementsScreen() {
             .order('created_at', { ascending: false });
         
         if (error) {
-            Alert.alert(t.error, error.message);
+            setToast({ visible: true, message: error.message, type: 'error' });
         } else {
             setMovements(data || []);
             setFilteredMovements(data || []);
@@ -290,6 +292,14 @@ export default function StockMovementsScreen() {
                     />
                 </View>
             </ScrollView>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }

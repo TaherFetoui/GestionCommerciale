@@ -6,6 +6,7 @@ import {
     ModernSearchBar,
     ModernTable,
 } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -22,6 +23,7 @@ export default function SuppliersListScreen() {
     const [supplierToDelete, setSupplierToDelete] = useState(null);
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [selectedSupplier, setSelectedSupplier] = useState(null);
+    const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
     const { theme, language } = useAuth();
     const tTheme = themes[theme];
     const t = translations[language];
@@ -31,7 +33,7 @@ export default function SuppliersListScreen() {
         setLoading(true);
         const { data, error } = await supabase.from('suppliers').select('*').order('name');
         if (error) {
-            Alert.alert(t.error, error.message);
+            setToast({ visible: true, message: error.message, type: 'error' });
         } else {
             setSuppliers(data || []);
             setFilteredSuppliers(data || []);
@@ -93,13 +95,13 @@ export default function SuppliersListScreen() {
                 .eq('id', supplierToDelete.id);
 
             if (error) {
-                Alert.alert(t.error, error.message);
+                setToast({ visible: true, message: error.message, type: 'error' });
             } else {
                 setSuppliers(prev => prev.filter(supplier => supplier.id !== supplierToDelete.id));
-                Alert.alert('✓ Succès', 'Fournisseur supprimé avec succès');
+                setToast({ visible: true, message: 'Fournisseur supprimé avec succès', type: 'success' });
             }
         } catch (error) {
-            Alert.alert(t.error, 'Impossible de supprimer le fournisseur');
+            setToast({ visible: true, message: 'Impossible de supprimer le fournisseur', type: 'error' });
         }
         
         setSupplierToDelete(null);
@@ -112,7 +114,7 @@ export default function SuppliersListScreen() {
 
     const handleUpdateSupplier = useCallback(async () => {
         if (!selectedSupplier?.name) {
-            Alert.alert(t.error, 'Le nom est requis');
+            setToast({ visible: true, message: 'Le nom est requis', type: 'warning' });
             return;
         }
 
@@ -128,14 +130,14 @@ export default function SuppliersListScreen() {
                 .eq('id', selectedSupplier.id);
 
             if (error) {
-                Alert.alert(t.error, error.message);
+                setToast({ visible: true, message: error.message, type: 'error' });
             } else {
-                Alert.alert('✓ Succès', 'Fournisseur modifié avec succès');
+                setToast({ visible: true, message: 'Fournisseur modifié avec succès', type: 'success' });
                 setEditModalVisible(false);
                 fetchSuppliers();
             }
         } catch (error) {
-            Alert.alert(t.error, 'Impossible de modifier le fournisseur');
+            setToast({ visible: true, message: 'Impossible de modifier le fournisseur', type: 'error' });
         }
     }, [selectedSupplier, t.error, fetchSuppliers]);
 
@@ -350,6 +352,14 @@ export default function SuppliersListScreen() {
                     </View>
                 </View>
             </Modal>
+
+            <Toast
+                visible={toast.visible}
+                message={toast.message}
+                type={toast.type}
+                theme={theme}
+                onHide={() => setToast({ ...toast, visible: false })}
+            />
         </View>
     );
 }

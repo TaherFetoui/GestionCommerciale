@@ -14,9 +14,12 @@ import {
 } from 'react-native';
 import {
     ModernActionButton,
+    ModernFilterChip,
     ModernSearchBar,
+    ModernStatusBadge,
     ModernTable,
 } from '../../components/ModernUIComponents';
+import Toast from '../../components/Toast';
 import { themes, translations } from '../../constants/AppConfig';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -36,6 +39,8 @@ export default function ClientsListScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [clientToDelete, setClientToDelete] = useState(null);
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
   // --- Styles & Translations ---
   const styles = getGlobalStyles(theme);
@@ -51,7 +56,7 @@ export default function ClientsListScreen() {
       .order('name', { ascending: true });
 
     if (error) {
-      Alert.alert(t.error, error.message);
+      setToast({ visible: true, message: error.message, type: 'error' });
     } else {
       setClients(data || []);
       setFilteredClients(data || []);
@@ -86,22 +91,28 @@ export default function ClientsListScreen() {
     setRefreshing(false);
   }, [fetchClients]);
 
-  // Filter clients based on search
+  // Filter clients based on search and type
   React.useEffect(() => {
+    let result = clients;
+
+    // Filter by search query
     if (searchQuery) {
-      setFilteredClients(
-        clients.filter(
-          (client) =>
-            client.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            client.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            client.phone?.includes(searchQuery) ||
-            client.matricule_fiscale?.includes(searchQuery)
-        )
+      result = result.filter(
+        (client) =>
+          client.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          client.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          client.phone?.includes(searchQuery) ||
+          client.matricule_fiscale?.includes(searchQuery)
       );
-    } else {
-      setFilteredClients(clients);
     }
-  }, [searchQuery, clients]);
+
+    // Filter by client type
+    if (typeFilter !== 'all') {
+      result = result.filter(client => client.type_client === typeFilter);
+    }
+
+    setFilteredClients(result);
+  }, [searchQuery, typeFilter, clients]);
 
   // --- Handlers ---
   const handleClientPress = (client) => {
@@ -115,7 +126,7 @@ export default function ClientsListScreen() {
 
   const handleUpdateClient = async () => {
     if (!selectedClient?.name) {
-        Alert.alert(t.error, t.requiredField);
+        setToast({ visible: true, message: t.requiredField, type: 'warning' });
         return;
     }
     setIsSaving(true);
@@ -131,9 +142,9 @@ export default function ClientsListScreen() {
         .eq('id', selectedClient.id);
 
     if (error) {
-        Alert.alert(t.error, error.message);
+        setToast({ visible: true, message: error.message, type: 'error' });
     } else {
-        Alert.alert(t.success, t.clientUpdated);
+        setToast({ visible: true, message: t.clientUpdated, type: 'success' });
         setIsModalVisible(false);
         fetchClients();
     }
@@ -152,13 +163,13 @@ export default function ClientsListScreen() {
         .eq('id', clientToDelete.id);
 
       if (error) {
-        Alert.alert(t.error, error.message);
+        setToast({ visible: true, message: error.message, type: 'error' });
       } else {
         setClients(prev => prev.filter(client => client.id !== clientToDelete.id));
-        Alert.alert('✓ Succès', 'Client supprimé avec succès');
+        setToast({ visible: true, message: 'Client supprimé avec succès', type: 'success' });
       }
     } catch (error) {
-      Alert.alert(t.error, 'Impossible de supprimer le client');
+      setToast({ visible: true, message: 'Impossible de supprimer le client', type: 'error' });
     }
     
     setClientToDelete(null);
@@ -177,9 +188,17 @@ export default function ClientsListScreen() {
       flex: 1.5,
       render: (row) => (
         <View>
-          <Text style={[localStyles.clientName, { color: tTheme.text }]} numberOfLines={1}>
-            {row.name}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={[localStyles.clientName, { color: tTheme.text }]} numberOfLines={1}>
+              {row.name}
+            </Text>
+            {row.type_client && (
+              <ModernStatusBadge 
+                label={row.type_client === 'entreprise' ? 'Entreprise' : 'Particulier'} 
+                variant={row.type_client === 'entreprise' ? 'info' : 'default'}
+              />
+            )}
+          </View>
           {row.matricule_fiscale && (
             <Text style={[localStyles.clientSubtext, { color: tTheme.textSecondary }]} numberOfLines={1}>
               MF: {row.matricule_fiscale}
@@ -242,6 +261,7 @@ export default function ClientsListScreen() {
               if (e && e.stopPropagation) {
                 e.stopPropagation();
               }
+              console.log('Delete button pressed!');
               setClientToDelete(row);
               setDeleteModalVisible(true);
             }}
@@ -253,23 +273,42 @@ export default function ClientsListScreen() {
     },
   ];
 
+  // Filter options
+  const filterOptions = [
+    { value: 'all', label: 'Tous' },
+    { value: 'entreprise', label: 'Entreprises' },
+    { value: 'particulier', label: 'Particuliers' },
+  ];
+
   // --- Render ---
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: tTheme.background }]}>
       <ScrollView
         contentContainerStyle={localStyles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[tTheme.primary]} />
         }
       >
-        {/* Search Bar */}
-        <View style={localStyles.searchContainer}>
+        {/* Search and Filters */}
+        <View style={localStyles.filtersContainer}>
           <ModernSearchBar
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Rechercher (nom, email, téléphone, MF)..."
             theme={theme}
           />
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={localStyles.filterChipsContainer}>
+            {filterOptions.map((filter) => (
+              <ModernFilterChip
+                key={filter.value}
+                label={filter.label}
+                active={typeFilter === filter.value}
+                onPress={() => setTypeFilter(filter.value)}
+                theme={theme}
+              />
+            ))}
+          </ScrollView>
         </View>
 
         {/* Modern Table */}
@@ -404,6 +443,14 @@ export default function ClientsListScreen() {
           </View>
         </View>
       </Modal>
+
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        theme={theme}
+        onHide={() => setToast({ ...toast, visible: false })}
+      />
     </View>
   );
 }
@@ -425,8 +472,11 @@ const localStyles = StyleSheet.create({
   scrollContent: {
     padding: 20,
   },
-  searchContainer: {
+  filtersContainer: {
     marginBottom: 20,
+  },
+  filterChipsContainer: {
+    marginTop: 12,
   },
   tableWrapper: {
     marginBottom: 20,

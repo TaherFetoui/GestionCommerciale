@@ -93,7 +93,7 @@ export const generateInvoiceHtml = (invoice, client, companyInfo) => {
         email: companyInfo.email || '',
         website: companyInfo.website || companyInfo.email || '',
         taxId: companyInfo.tax_id || '',
-        tradeRegister: companyInfo.trade_register || ''
+        rib: companyInfo.rib || ''
     };
 
     // Calculate totals and VAT summary
@@ -206,17 +206,25 @@ export const generateInvoiceHtml = (invoice, client, companyInfo) => {
             .company-logo {
                 width: 120px;
                 height: 80px;
-                background: linear-gradient(135deg, #4F46E5 0%, #6366F1 100%);
+                background: white;
                 border-radius: 8px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 margin-bottom: 12px;
                 border: 2px solid #E5E7EB;
+                overflow: hidden;
+            }
+
+            .company-logo img {
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+                padding: 8px;
             }
 
             .company-logo-text {
-                color: white;
+                color: #4F46E5;
                 font-size: 36px;
                 font-weight: bold;
                 letter-spacing: 2px;
@@ -556,7 +564,10 @@ export const generateInvoiceHtml = (invoice, client, companyInfo) => {
             <div class="header">
                 <div class="company-info">
                     <div class="company-logo">
-                        <div class="company-logo-text">${company.name.substring(0, 2).toUpperCase()}</div>
+                        ${companyInfo.logo_url ? 
+                            `<img src="${companyInfo.logo_url}" alt="${company.name}" />` : 
+                            `<div class="company-logo-text">${company.name.substring(0, 2).toUpperCase()}</div>`
+                        }
                     </div>
                     <div class="company-name">${company.name}</div>
                     <div class="company-details">
@@ -694,7 +705,7 @@ export const generateInvoiceHtml = (invoice, client, companyInfo) => {
                 <div class="company-footer">
                     ${company.address ? 'Siège: ' + company.address + (company.city ? ', ' + company.city : '') : ''}${company.address ? '<br>' : ''}
                     ${company.phone ? 'Tél: ' + company.phone : ''}${company.website ? ' - Site Web: ' + company.website : ''}${company.email ? ' - Email: ' + company.email : ''}${(company.phone || company.website || company.email) ? '<br>' : ''}
-                    ${company.tradeRegister ? 'RC: ' + company.tradeRegister : ''}
+                    ${company.rib ? 'RIB: ' + company.rib : ''}
                 </div>
             </div>
         </div>
@@ -709,12 +720,533 @@ export const printInvoiceWeb = (invoice, client, companyInfo) => {
     const printWindow = window.open('', '_blank');
     printWindow.document.write(html);
     printWindow.document.close();
-    printWindow.print();
+    
+    // Wait for images to load before printing
+    if (companyInfo.logo_url) {
+        printWindow.onload = () => {
+            const images = printWindow.document.images;
+            let loadedImages = 0;
+            const totalImages = images.length;
+            
+            if (totalImages === 0) {
+                printWindow.print();
+                return;
+            }
+            
+            for (let i = 0; i < totalImages; i++) {
+                if (images[i].complete) {
+                    loadedImages++;
+                } else {
+                    images[i].onload = () => {
+                        loadedImages++;
+                        if (loadedImages === totalImages) {
+                            printWindow.print();
+                        }
+                    };
+                    images[i].onerror = () => {
+                        loadedImages++;
+                        if (loadedImages === totalImages) {
+                            printWindow.print();
+                        }
+                    };
+                }
+            }
+            
+            if (loadedImages === totalImages) {
+                printWindow.print();
+            }
+        };
+    } else {
+        printWindow.print();
+    }
 };
 
 // Export function for downloading PDF on web (using browser's print to PDF)
 export const downloadInvoicePDFWeb = (invoice, client, companyInfo) => {
     printInvoiceWeb(invoice, client, companyInfo);
+};
+
+// ============= DELIVERY NOTE PDF GENERATOR =============
+
+export const generateDeliveryNoteHtml = (deliveryNote, client, companyInfo) => {
+    // Validate required company info
+    if (!companyInfo) {
+        throw new Error('Company information is required to generate delivery note');
+    }
+
+    // Helper to format date
+    const formatDate = (dateString) => {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
+
+    // Extract company info from database
+    const company = {
+        name: companyInfo.name || 'N/A',
+        address: companyInfo.address || 'N/A',
+        city: companyInfo.city || '',
+        postalCode: companyInfo.postal_code || '',
+        phone: companyInfo.phone || '',
+        email: companyInfo.email || '',
+        website: companyInfo.website || companyInfo.email || '',
+        taxId: companyInfo.tax_id || '',
+        rib: companyInfo.rib || ''
+    };
+
+    // Parse items
+    const items = deliveryNote.items || [];
+
+    // Generate item rows
+    const itemRows = items.map((item, index) => {
+        const qty = parseFloat(item.quantity) || 0;
+
+        return `
+            <tr>
+                <td class="text-center">${index + 1}</td>
+                <td class="text-left">${item.item_id || item.ref || '-'}</td>
+                <td class="text-left">${item.item_name || item.description || ''}</td>
+                <td class="text-center font-bold">${qty}</td>
+            </tr>
+        `;
+    }).join('');
+
+    return `
+    <!DOCTYPE html>
+    <html lang="fr">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Bon de Livraison ${deliveryNote.note_number || deliveryNote.delivery_note_number}</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            @page {
+                size: A4;
+                margin: 0;
+            }
+
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                font-size: 11px;
+                line-height: 1.4;
+                color: #333;
+                background: white;
+            }
+
+            .page {
+                width: 210mm;
+                min-height: 297mm;
+                padding: 15mm;
+                margin: 0 auto;
+                background: white;
+            }
+
+            /* Header Section */
+            .header {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                padding-bottom: 20px;
+                border-bottom: 4px solid #000;
+                margin-bottom: 15px;
+            }
+
+            .company-info {
+                flex: 1;
+                max-width: 55%;
+            }
+
+            .company-logo {
+                width: 120px;
+                height: 80px;
+                background: white;
+                border-radius: 8px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-bottom: 12px;
+                border: 2px solid #E5E7EB;
+                overflow: hidden;
+            }
+
+            .company-logo img {
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+                padding: 8px;
+            }
+
+            .company-logo-text {
+                color: #4F46E5;
+                font-size: 36px;
+                font-weight: bold;
+                letter-spacing: 2px;
+            }
+
+            .company-name {
+                font-size: 18px;
+                font-weight: bold;
+                color: #000;
+                margin-bottom: 8px;
+                text-transform: uppercase;
+            }
+
+            .company-details {
+                font-size: 9px;
+                color: #333;
+                line-height: 1.8;
+            }
+
+            .note-title {
+                text-align: right;
+                flex: 1;
+                background: #F3F4F6;
+                padding: 15px;
+                border-radius: 8px;
+                border: 2px solid #000;
+            }
+
+            .note-type {
+                font-size: 24px;
+                font-weight: bold;
+                color: #000;
+                margin-bottom: 0px;
+                text-transform: uppercase;
+            }
+
+            /* Note Info Box */
+            .note-info-box {
+                border: 2px solid #000;
+                border-radius: 0px;
+                padding: 0;
+                margin-bottom: 15px;
+                background: white;
+            }
+
+            .note-info-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 0;
+            }
+
+            .info-item {
+                display: flex;
+                flex-direction: column;
+                padding: 10px 12px;
+                border-right: 1px solid #000;
+                border-bottom: 1px solid #000;
+            }
+
+            .info-item:nth-child(3n) {
+                border-right: none;
+            }
+
+            .info-item:nth-last-child(-n+3) {
+                border-bottom: none;
+            }
+
+            .info-label {
+                font-size: 8px;
+                color: #000;
+                font-weight: bold;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 4px;
+            }
+
+            .info-value {
+                font-size: 11px;
+                font-weight: 600;
+                color: #000;
+            }
+
+            /* Client Section */
+            .client-section {
+                background: white;
+                border: 2px solid #000;
+                padding: 12px 15px;
+                margin-bottom: 15px;
+                border-radius: 0px;
+            }
+
+            .client-label {
+                font-size: 10px;
+                font-weight: bold;
+                color: #000;
+                margin-bottom: 8px;
+                text-transform: uppercase;
+                letter-spacing: 0.8px;
+            }
+
+            .client-name {
+                font-size: 13px;
+                font-weight: bold;
+                color: #000;
+                margin-bottom: 6px;
+            }
+
+            .client-details {
+                font-size: 9px;
+                color: #000;
+                line-height: 1.8;
+            }
+
+            /* Items Table */
+            .items-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 15px;
+                border: 2px solid #000;
+            }
+
+            .items-table thead {
+                background: white;
+                color: #000;
+                border-bottom: 2px solid #000;
+            }
+
+            .items-table th {
+                padding: 10px 6px;
+                text-align: left;
+                font-size: 9px;
+                font-weight: bold;
+                text-transform: uppercase;
+                letter-spacing: 0.3px;
+                border-right: 1px solid #000;
+            }
+
+            .items-table th:last-child {
+                border-right: none;
+            }
+
+            .items-table tbody tr {
+                border-bottom: 1px solid #000;
+            }
+
+            .items-table tbody tr:last-child {
+                border-bottom: 2px solid #000;
+            }
+
+            .items-table tbody tr:nth-child(even) {
+                background-color: #F9FAFB;
+            }
+
+            .items-table td {
+                padding: 8px 6px;
+                font-size: 9px;
+                color: #000;
+                border-right: 1px solid #D1D5DB;
+            }
+
+            .items-table td:last-child {
+                border-right: none;
+            }
+
+            .text-left { text-align: left; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .font-bold { font-weight: 600; }
+
+            /* Signature Section */
+            .signature-section {
+                display: flex;
+                justify-content: space-between;
+                margin-top: 40px;
+                padding-top: 20px;
+                border-top: 1px solid #E5E7EB;
+            }
+
+            .signature-box {
+                text-align: center;
+                flex: 1;
+            }
+
+            .signature-label {
+                font-size: 10px;
+                font-weight: bold;
+                color: #000;
+                margin-bottom: 40px;
+            }
+
+            .signature-line {
+                width: 200px;
+                height: 1px;
+                background: #000;
+                margin: 0 auto;
+            }
+
+            /* Footer */
+            .footer {
+                margin-top: 30px;
+                padding-top: 15px;
+                border-top: 2px solid #000;
+                text-align: center;
+            }
+
+            .footer-text {
+                font-size: 8px;
+                color: #666;
+                line-height: 1.6;
+            }
+
+            @media print {
+                body {
+                    print-color-adjust: exact;
+                    -webkit-print-color-adjust: exact;
+                }
+                .page {
+                    margin: 0;
+                    padding: 15mm;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="page">
+            <!-- Header -->
+            <div class="header">
+                <div class="company-info">
+                    <div class="company-logo">
+                        ${companyInfo.logo_url 
+                            ? `<img src="${companyInfo.logo_url}" alt="Company Logo" />`
+                            : `<div class="company-logo-text">${(company.name || 'GE').substring(0, 2).toUpperCase()}</div>`
+                        }
+                    </div>
+                    <div class="company-name">${company.name}</div>
+                    <div class="company-details">
+                        <strong>Adresse:</strong> ${company.address}<br>
+                        ${company.city && company.postalCode ? `${company.postalCode} ${company.city}<br>` : ''}
+                        <strong>Tél:</strong> ${company.phone}<br>
+                        <strong>Email:</strong> ${company.email}<br>
+                        ${company.taxId ? `<strong>MF:</strong> ${company.taxId}<br>` : ''}
+                        ${company.rib ? `<strong>RIB:</strong> ${company.rib}` : ''}
+                    </div>
+                </div>
+                <div class="note-title">
+                    <div class="note-type">BON DE LIVRAISON</div>
+                </div>
+            </div>
+
+            <!-- Note Info -->
+            <div class="note-info-box">
+                <div class="note-info-grid">
+                    <div class="info-item">
+                        <div class="info-label">N° Bon</div>
+                        <div class="info-value">${deliveryNote.note_number || deliveryNote.delivery_note_number || 'N/A'}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Date</div>
+                        <div class="info-value">${formatDate(deliveryNote.created_at || new Date())}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Statut</div>
+                        <div class="info-value">${deliveryNote.status === 'pending' ? 'En attente' : deliveryNote.status === 'delivered' ? 'Livré' : deliveryNote.status === 'cancelled' ? 'Annulé' : 'N/A'}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Client Info -->
+            <div class="client-section">
+                <div class="client-label">CLIENT</div>
+                <div class="client-name">${client?.name || 'N/A'}</div>
+                <div class="client-details">
+                    ${client?.address ? `<strong>Adresse:</strong> ${client.address}<br>` : ''}
+                    ${client?.city ? `${client.city}${client.postal_code ? ` ${client.postal_code}` : ''}<br>` : ''}
+                    ${client?.phone ? `<strong>Tél:</strong> ${client.phone}<br>` : ''}
+                    ${client?.email ? `<strong>Email:</strong> ${client.email}<br>` : ''}
+                    ${client?.tax_id ? `<strong>MF:</strong> ${client.tax_id}` : ''}
+                </div>
+            </div>
+
+            <!-- Items Table -->
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">N°</th>
+                        <th style="width: 15%;">Référence</th>
+                        <th style="width: 60%;">Désignation</th>
+                        <th style="width: 20%;" class="text-center">Quantité</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itemRows}
+                </tbody>
+            </table>
+
+            <!-- Signature Section -->
+            <div class="signature-section">
+                <div class="signature-box">
+                    <div class="signature-label">Signature du Fournisseur</div>
+                    <div class="signature-line"></div>
+                </div>
+                <div class="signature-box">
+                    <div class="signature-label">Signature du Client</div>
+                    <div class="signature-line"></div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="footer">
+                <div class="footer-text">
+                    ${company.name} - ${company.address}${company.city ? ` - ${company.city}` : ''}<br>
+                    Tél: ${company.phone} ${company.email ? `- Email: ${company.email}` : ''}<br>
+                    ${company.taxId ? `MF: ${company.taxId}` : ''}${company.rib ? ` - RIB: ${company.rib}` : ''}
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+};
+
+export const printDeliveryNoteWeb = (deliveryNote, client, companyInfo) => {
+    const html = generateDeliveryNoteHtml(deliveryNote, client, companyInfo);
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(html);
+    printWindow.document.close();
+    
+    // Wait for images to load before printing
+    if (companyInfo.logo_url) {
+        printWindow.onload = () => {
+            const images = printWindow.document.images;
+            let loadedImages = 0;
+            const totalImages = images.length;
+            
+            if (totalImages === 0) {
+                printWindow.print();
+                return;
+            }
+            
+            for (let i = 0; i < totalImages; i++) {
+                if (images[i].complete) {
+                    loadedImages++;
+                } else {
+                    images[i].onload = () => {
+                        loadedImages++;
+                        if (loadedImages === totalImages) {
+                            printWindow.print();
+                        }
+                    };
+                    images[i].onerror = () => {
+                        loadedImages++;
+                        if (loadedImages === totalImages) {
+                            printWindow.print();
+                        }
+                    };
+                }
+            }
+            
+            if (loadedImages === totalImages) {
+                printWindow.print();
+            }
+        };
+    } else {
+        printWindow.print();
+    }
 };
 
 // ============= PURCHASE ORDER PDF GENERATOR =============
@@ -744,6 +1276,7 @@ export const generatePurchaseOrderHtml = (order, supplier, companyInfo) => {
         email: companyInfo.email || '',
         website: companyInfo.website || companyInfo.email || '',
         taxId: companyInfo.tax_id || '',
+        rib: companyInfo.rib || '',
         tradeRegister: companyInfo.trade_register || ''
     };
 
@@ -838,17 +1371,25 @@ export const generatePurchaseOrderHtml = (order, supplier, companyInfo) => {
             .company-logo {
                 width: 120px;
                 height: 80px;
-                background: linear-gradient(135deg, #059669 0%, #10B981 100%);
+                background: white;
                 border-radius: 8px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 margin-bottom: 12px;
                 border: 2px solid #E5E7EB;
+                overflow: hidden;
+            }
+
+            .company-logo img {
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+                padding: 8px;
             }
 
             .company-logo-text {
-                color: white;
+                color: #4F46E5;
                 font-size: 36px;
                 font-weight: bold;
                 letter-spacing: 2px;
@@ -1136,7 +1677,10 @@ export const generatePurchaseOrderHtml = (order, supplier, companyInfo) => {
             <div class="header">
                 <div class="company-info">
                     <div class="company-logo">
-                        <div class="company-logo-text">${company.name.substring(0, 2).toUpperCase()}</div>
+                        ${companyInfo.logo_url ? 
+                            `<img src="${companyInfo.logo_url}" alt="${company.name}" />` : 
+                            `<div class="company-logo-text">${company.name.substring(0, 2).toUpperCase()}</div>`
+                        }
                     </div>
                     <div class="company-name">${company.name}</div>
                     <div class="company-details">
@@ -1230,7 +1774,7 @@ export const generatePurchaseOrderHtml = (order, supplier, companyInfo) => {
                 <div class="company-footer">
                     ${company.address ? 'Siège: ' + company.address + (company.city ? ', ' + company.city : '') : ''}${company.address ? '<br>' : ''}
                     ${company.phone ? 'Tél: ' + company.phone : ''}${company.website ? ' - Site Web: ' + company.website : ''}${company.email ? ' - Email: ' + company.email : ''}${(company.phone || company.website || company.email) ? '<br>' : ''}
-                    ${company.tradeRegister ? 'RC: ' + company.tradeRegister : ''}
+                    ${company.rib ? 'RIB: ' + company.rib : ''}
                 </div>
             </div>
         </div>
@@ -1556,72 +2100,214 @@ export const printFinanceDocument = (documentData, documentType, companyInfo = {
         return titles[type] || 'Document Financier';
     };
 
+    const company = {
+        name: companyInfo.name || 'N/A',
+        address: companyInfo.address || 'N/A',
+        city: companyInfo.city || '',
+        postalCode: companyInfo.postal_code || '',
+        phone: companyInfo.phone || '',
+        email: companyInfo.email || '',
+        website: companyInfo.website || companyInfo.email || '',
+        taxId: companyInfo.tax_id || '',
+        rib: companyInfo.rib || ''
+    };
+
     const html = `
         <!DOCTYPE html>
-        <html>
+        <html lang="fr">
         <head>
             <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>${getDocumentTitle(documentType)}</title>
             <style>
                 * { margin: 0; padding: 0; box-sizing: border-box; }
-                body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #333; }
-                .container { max-width: 800px; margin: 0 auto; }
-                .header { text-align: center; margin-bottom: 40px; border-bottom: 3px solid #6366f1; padding-bottom: 20px; }
-                .company-name { font-size: 24px; font-weight: bold; color: #6366f1; margin-bottom: 10px; }
-                .company-info { font-size: 12px; color: #666; line-height: 1.6; }
-                .doc-title { font-size: 28px; font-weight: bold; color: #1f2937; margin: 30px 0; text-align: center; }
-                .doc-info { background: #f9fafb; padding: 20px; border-radius: 8px; margin: 20px 0; }
-                .info-row { display: flex; padding: 10px 0; border-bottom: 1px solid #e5e7eb; }
-                .info-row:last-child { border-bottom: none; }
-                .info-label { font-weight: 600; color: #6366f1; min-width: 200px; }
-                .info-value { color: #1f2937; flex: 1; }
-                .footer { margin-top: 50px; text-align: center; font-size: 11px; color: #999; border-top: 1px solid #e5e7eb; padding-top: 20px; }
-                .signature-section { margin-top: 60px; display: flex; justify-content: space-between; }
-                .signature-box { width: 200px; text-align: center; border-top: 1px solid #333; padding-top: 10px; }
-                @media print { body { padding: 20px; } }
+                @page { size: A4; margin: 0; }
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    font-size: 11px;
+                    line-height: 1.4;
+                    color: #333;
+                    background: white;
+                }
+                .page {
+                    width: 210mm;
+                    min-height: 297mm;
+                    padding: 15mm;
+                    margin: 0 auto;
+                    background: white;
+                }
+                .header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    padding-bottom: 20px;
+                    border-bottom: 4px solid #000;
+                    margin-bottom: 15px;
+                }
+                .company-info { flex: 1; max-width: 55%; }
+                .company-logo {
+                    width: 120px;
+                    height: 80px;
+                    background: white;
+                    border-radius: 8px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-bottom: 12px;
+                    border: 2px solid #E5E7EB;
+                    overflow: hidden;
+                }
+                .company-logo img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: contain;
+                    padding: 8px;
+                }
+                .company-logo-text { color: #4F46E5; font-size: 36px; font-weight: bold; letter-spacing: 2px; }
+                .company-name {
+                    font-size: 18px;
+                    font-weight: bold;
+                    color: #000;
+                    margin-bottom: 8px;
+                    text-transform: uppercase;
+                }
+                .company-details { font-size: 9px; color: #333; line-height: 1.8; }
+                .doc-title {
+                    text-align: right;
+                    flex: 1;
+                    background: #F3F4F6;
+                    padding: 15px;
+                    border-radius: 8px;
+                    border: 2px solid #000;
+                }
+                .doc-type {
+                    font-size: 24px;
+                    font-weight: bold;
+                    color: #000;
+                    margin-bottom: 0px;
+                    text-transform: uppercase;
+                }
+                .doc-info {
+                    border: 2px solid #000;
+                    border-radius: 0px;
+                    padding: 0;
+                    margin-bottom: 15px;
+                    background: white;
+                }
+                .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; }
+                .info-row {
+                    display: flex;
+                    flex-direction: column;
+                    padding: 10px 12px;
+                    border-right: 1px solid #000;
+                    border-bottom: 1px solid #000;
+                }
+                .info-row:nth-child(2n) { border-right: none; }
+                .info-row:nth-last-child(-n+2) { border-bottom: none; }
+                .info-label {
+                    font-size: 8px;
+                    color: #000;
+                    font-weight: bold;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    margin-bottom: 4px;
+                }
+                .info-value { font-size: 11px; font-weight: 600; color: #000; }
+                .signature-section { margin-top: 30px; margin-bottom: 15px; text-align: right; }
+                .signature-label {
+                    font-size: 10px;
+                    color: #000;
+                    font-weight: bold;
+                    margin-bottom: 50px;
+                    text-transform: uppercase;
+                }
+                .signature-line {
+                    border-top: 2px solid #000;
+                    width: 200px;
+                    margin-left: auto;
+                    padding-top: 5px;
+                    font-size: 8px;
+                    color: #666;
+                    text-align: center;
+                }
+                .footer {
+                    margin-top: 30px;
+                    padding-top: 15px;
+                    border-top: 3px solid #000;
+                }
+                .company-footer {
+                    text-align: center;
+                    font-size: 8px;
+                    color: #000;
+                    line-height: 1.8;
+                    padding: 8px;
+                    border: 1px solid #000;
+                    background: #F9FAFB;
+                }
+                @media print {
+                    .page { margin: 0; box-shadow: none; }
+                    body { background: white; }
+                }
             </style>
         </head>
         <body>
-            <div class="container">
+            <div class="page">
                 <div class="header">
-                    <div class="company-name">${companyInfo.name || 'Entreprise'}</div>
                     <div class="company-info">
-                        ${companyInfo.address || ''}<br>
-                        ${companyInfo.phone ? 'Tél: ' + companyInfo.phone : ''} ${companyInfo.email ? '• Email: ' + companyInfo.email : ''}<br>
-                        ${companyInfo.tax_id ? 'MF: ' + companyInfo.tax_id : ''}
+                        <div class="company-logo">
+                            ${companyInfo.logo_url ? 
+                                `<img src="${companyInfo.logo_url}" alt="${company.name}" />` : 
+                                `<div class="company-logo-text">${company.name.substring(0, 2).toUpperCase()}</div>`
+                            }
+                        </div>
+                        <div class="company-name">${company.name}</div>
+                        <div class="company-details">
+                            ${company.address}${company.city ? ', ' + company.city : ''}<br>
+                            ${company.postalCode ? company.postalCode + '<br>' : ''}
+                            ${company.phone ? 'TEL: ' + company.phone : ''}${company.phone ? '<br>' : ''}
+                            ${company.website ? 'Site Web: ' + company.website : ''}${company.website ? '<br>' : ''}
+                            ${company.email ? 'Email: ' + company.email : ''}
+                        </div>
+                    </div>
+                    <div class="doc-title">
+                        <div class="doc-type">${getDocumentTitle(documentType)}</div>
                     </div>
                 </div>
 
-                <div class="doc-title">${getDocumentTitle(documentType)}</div>
-
                 <div class="doc-info">
-                    ${Object.entries(documentData).map(([key, value]) => {
-                        if (key === 'id' || key === 'created_at' || key === 'updated_at' || key === 'created_by' || key === 'user_id') return '';
-                        const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                        let displayValue = value;
-                        
-                        if (key.includes('date')) displayValue = formatDate(value);
-                        else if (key.includes('amount') || key.includes('balance')) displayValue = formatAmount(value) + ' TND';
-                        else if (key === 'status') displayValue = value?.replace(/_/g, ' ').toUpperCase();
-                        else if (typeof value === 'boolean') displayValue = value ? 'Oui' : 'Non';
-                        else if (value === null || value === undefined) displayValue = '-';
-                        
-                        return `
-                            <div class="info-row">
-                                <div class="info-label">${label}</div>
-                                <div class="info-value">${displayValue}</div>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-
-                <div class="signature-section">
-                    <div class="signature-box">Préparé par</div>
-                    <div class="signature-box">Approuvé par</div>
+                    <div class="info-grid">
+                        ${Object.entries(documentData).map(([key, value]) => {
+                            if (key === 'id' || key === 'created_at' || key === 'updated_at' || key === 'created_by' || key === 'user_id') return '';
+                            const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                            let displayValue = value;
+                            
+                            if (key.includes('date')) displayValue = formatDate(value);
+                            else if (key.includes('amount') || key.includes('balance')) displayValue = formatAmount(value) + ' TND';
+                            else if (key === 'status') displayValue = value?.replace(/_/g, ' ').toUpperCase();
+                            else if (typeof value === 'boolean') displayValue = value ? 'Oui' : 'Non';
+                            else if (value === null || value === undefined) displayValue = '-';
+                            
+                            return `
+                                <div class="info-row">
+                                    <div class="info-label">${label}</div>
+                                    <div class="info-value">${displayValue}</div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
                 </div>
 
                 <div class="footer">
-                    Document généré le ${formatDate(new Date())} - ${companyInfo.name || 'Gestion Commerciale'}
+                    <div class="signature-section">
+                        <div class="signature-label">Cachet et Signature</div>
+                        <div class="signature-line">Signature autorisée</div>
+                    </div>
+
+                    <div class="company-footer">
+                        ${company.address ? 'Siège: ' + company.address + (company.city ? ', ' + company.city : '') : ''}${company.address ? '<br>' : ''}
+                        ${company.phone ? 'Tél: ' + company.phone : ''}${company.website ? ' - Site Web: ' + company.website : ''}${company.email ? ' - Email: ' + company.email : ''}${(company.phone || company.website || company.email) ? '<br>' : ''}
+                        ${company.rib ? 'RIB: ' + company.rib : ''}
+                    </div>
                 </div>
             </div>
         </body>
